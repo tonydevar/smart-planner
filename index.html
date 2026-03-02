@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Planner - Neuroengineering Career Transition</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="app-logo">
+        <div class="logo-icon">🧠</div>
+        <h1>Smart Planner</h1>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="config-btn">⚙️ Configure</button>
+      </div>
+    </header>
+    <aside class="sidebar">
+      <div class="glass-card">
+        <div class="card-header">
+          <h2 class="card-title">Missions</h2>
+          <button class="btn btn-primary btn-icon" id="add-mission-btn" title="Add Mission">+</button>
+        </div>
+        <div class="mission-panel" id="mission-list"></div>
+      </div>
+      <div class="glass-card ai-panel">
+        <div class="card-header">
+          <div class="ai-icon">✨</div>
+          <h2 class="card-title">AI Helper</h2>
+        </div>
+        <div class="form-group">
+          <input type="text" class="form-input" id="ai-task-name" placeholder="Task name...">
+        </div>
+        <div class="form-group">
+          <textarea class="form-textarea" id="ai-task-desc" placeholder="Description (optional)"></textarea>
+        </div>
+        <button class="btn btn-primary" id="ai-analyze-btn">Analyze & Suggest</button>
+        <div class="ai-suggestions" id="ai-suggestions"></div>
+      </div>
+    </aside>
+    <main class="main-content">
+      <div class="glass-card">
+        <div class="card-header"><h2 class="card-title">Time Allotments</h2></div>
+        <div class="allotment-grid" id="allotment-grid"></div>
+      </div>
+      <div class="glass-card" style="flex:1;">
+        <div class="card-header">
+          <h2 class="card-title">Daily Schedule</h2>
+          <button class="btn btn-primary" id="add-task-btn">+ Add Task</button>
+        </div>
+        <div class="schedule-container custom-scroll" id="schedule-container"></div>
+      </div>
+      <div class="glass-card">
+        <div class="card-header"><h2 class="card-title">Tasks</h2></div>
+        <div class="task-list custom-scroll" id="task-list"></div>
+      </div>
+    </main>
+  </div>
+  <div class="modal-overlay" id="task-modal">
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Add Task</h3><button class="modal-close">×</button></div>
+      <form id="task-form">
+        <div class="form-group"><label class="form-label">Task Name</label><input type="text" class="form-input" name="task-name" required></div>
+        <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" name="task-description"></textarea></div>
+        <div class="form-group"><label class="form-label">Priority</label><select class="form-select" name="task-priority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div>
+        <div class="form-group"><label class="form-label">Category</label><select class="form-select" name="task-category"><option value="explore">Explore</option><option value="learn">Learn</option><option value="build">Build</option><option value="integrate">Integrate</option><option value="reflect">Reflect</option><option value="office-hours">Office Hours</option><option value="other">Other</option></select></div>
+        <div class="form-group"><label class="form-label">Duration (min)</label><input type="number" class="form-input" name="task-duration" value="30" min="5" step="5"></div>
+        <div class="form-group"><label class="form-label">Mission</label><select class="form-select" name="task-mission"><option value="">No Mission</option></select></div>
+        <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('task')">Cancel</button><button type="submit" class="btn btn-primary">Save Task</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-overlay" id="mission-modal">
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Add Mission</h3><button class="modal-close">×</button></div>
+      <form id="mission-form">
+        <div class="form-group"><label class="form-label">Mission Name</label><input type="text" class="form-input" name="mission-name" required></div>
+        <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" name="mission-description"></textarea></div>
+        <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('mission')">Cancel</button><button type="submit" class="btn btn-primary">Save Mission</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-overlay" id="config-modal">
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Configure Time Allotments</h3><button class="modal-close">×</button></div>
+      <form id="config-form">
+        <div class="form-group"><label class="form-label">Explore (min/day)</label><input type="number" class="form-input" name="allot-explore" value="60" min="0" step="15"></div>
+        <div class="form-group"><label class="form-label">Learn (min/day)</label><input type="number" class="form-input" name="allot-learn" value="120" min="0" step="15"></div>
+        <div class="form-group"><label class="form-label">Build (min/day)</label><input type="number" class="form-input" name="allot-build" value="180" min="0" step="15"></div>
+        <div class="form-group"><label class="form-label">Integrate (min/day)</label><input type="number" class="form-input" name="allot-integrate" value="60" min="0" step="15"></div>
+        <div class="form-group"><label class="form-label">Reflect (min/day)</label><input type="number" class="form-input" name="allot-reflect" value="30" min="0" step="15"></div>
+        <div class="form-group"><label class="form-label">Office Hours (min/day)</label><input type="number" class="form-input" name="allot-office-hours" value="60" min="0" step="15"></div>
+        <div class="form-group"><label class="form-label">Other (min/day)</label><input type="number" class="form-input" name="allot-other" value="60" min="0" step="15"></div>
+        <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('config')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+      </form>
+    </div>
+  </div>
+  <script src="storage.js"></script>
+  <script src="scheduler.js"></script>
+  <script src="ai-helper.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
