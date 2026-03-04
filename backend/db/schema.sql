@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   name              TEXT NOT NULL,
   description       TEXT NOT NULL DEFAULT '',
   priority          TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('high','medium','low')),
-  category          TEXT NOT NULL DEFAULT 'other'  CHECK(category IN ('explore','learn','build','integrate','reflect','office-hours','other')),
+  category          TEXT NOT NULL DEFAULT 'other'  CHECK(category IN ('explore','learn','build','integrate','office-hours','other')),
   estimated_minutes INTEGER NOT NULL DEFAULT 30,
   completed         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -36,15 +36,16 @@ CREATE TABLE IF NOT EXISTS config (
 
 INSERT OR IGNORE INTO config (key, value) VALUES (
   'allotments',
-  '{"explore":60,"learn":120,"build":180,"integrate":60,"reflect":30,"office-hours":60,"other":60}'
+  '{"explore":60,"learn":120,"build":180,"integrate":60,"office-hours":60,"other":60}'
 );
 
-CREATE TABLE IF NOT EXISTS schedule_overrides (
-  id         TEXT PRIMARY KEY,
-  date       TEXT NOT NULL,
-  slot_index INTEGER NOT NULL,
-  task_id    TEXT REFERENCES tasks(id) ON DELETE SET NULL,
-  label      TEXT,
-  is_actual  INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(date, slot_index)
+CREATE TABLE IF NOT EXISTS schedule_slots (
+  id          TEXT PRIMARY KEY,
+  date        TEXT NOT NULL,
+  slot_index  INTEGER NOT NULL,
+  record_type TEXT NOT NULL DEFAULT 'planned'
+              CHECK(record_type IN ('planned','actual')),
+  task_id     TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+  label       TEXT,
+  UNIQUE(date, slot_index, record_type)
 );
