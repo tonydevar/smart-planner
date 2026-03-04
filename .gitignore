@@ -1,0 +1,46 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.test
+*.key
+*.pem
+secrets/
+.secrets/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies
+node_modules/
+vendor/
+venv/
+__pycache__/
+
+# Build
+dist/
+build/
+.next/
+.nuxt/
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/
+.cache/
