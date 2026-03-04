@@ -4,6 +4,7 @@ import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes } from '../uti
 import TaskModal from '../components/TaskModal.jsx';
 import MissionModal from '../components/MissionModal.jsx';
 import AllotmentModal from '../components/AllotmentModal.jsx';
+import ScheduleTable from '../components/ScheduleTable.jsx';
 import './PlannerPage.css';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -129,14 +130,14 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
 // AllotmentConfig
 // ──────────────────────────────────────────────────────────────────────────────
 function AllotmentConfig({ onEdit }) {
-  const { allotments, tasks } = useApp();
+  const { allotments, schedule } = useApp();
 
-  // Compute used minutes per category from incomplete tasks
+  // Derive used minutes reactively from the live schedule (15 min per slot)
   const usedPerCat = {};
   CATEGORIES.forEach(c => { usedPerCat[c] = 0; });
-  tasks.filter(t => !t.completed).forEach(t => {
-    if (usedPerCat[t.category] !== undefined) {
-      usedPerCat[t.category] += (t.estimated_minutes || 0);
+  (schedule || []).forEach(slot => {
+    if (slot.category && usedPerCat[slot.category] !== undefined) {
+      usedPerCat[slot.category] += 15;
     }
   });
 
@@ -239,13 +240,13 @@ export default function PlannerPage() {
           <AllotmentConfig onEdit={() => setAllotModal(true)} />
         </aside>
 
-        {/* Main area (placeholder for Feature 3 schedule) */}
+        {/* Main area — 24h schedule */}
         <main className="planner-main">
-          <div className="schedule-placeholder glass-card">
-            <div className="schedule-placeholder-icon">📅</div>
-            <h2>Schedule</h2>
-            <p>Daily schedule view coming in the next feature.</p>
+          <div className="schedule-header">
+            <h2 className="schedule-title">📅 Today's Schedule</h2>
+            <span className="schedule-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
           </div>
+          <ScheduleTable />
         </main>
       </div>
 

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
+import { buildSchedule } from '../hooks/useSchedule.js';
 
 const AppContext = createContext(null);
 
@@ -213,9 +214,16 @@ export function AppProvider({ children }) {
     return override;
   }, []);
 
+  // Reactive schedule — recomputes automatically when tasks, allotments, or overrides change
+  const schedule = useMemo(
+    () => buildSchedule(state.tasks, state.allotments, state.overrides),
+    [state.tasks, state.allotments, state.overrides]
+  );
+
   return (
     <AppContext.Provider value={{
       ...state,
+      schedule,
       createTask, updateTask, deleteTask, toggleTask,
       createMission, updateMission, deleteMission,
       updateAllotments,
