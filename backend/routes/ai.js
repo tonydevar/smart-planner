@@ -51,7 +51,7 @@ router.post('/estimate', async (req, res) => {
   const systemPrompt = `You are a task estimation assistant. Given a task name and description, respond ONLY with valid JSON in this exact shape:
 {
   "estimatedMinutes": <integer>,
-  "suggestedCategory": "<one of: explore|learn|build|integrate|reflect|office-hours|other>",
+  "suggestedCategory": "<one of: explore|learn|build|integrate|office-hours|other>",
   "suggestedSubtasks": [{ "name": "<string>" }, ...]
 }
 Provide 3-5 subtasks. Be concise.`;
