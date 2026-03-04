@@ -5,6 +5,11 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 
+// Run DB schema init + migrations before any route handlers load
+const db                 = require('./db/database');
+const { runMigration }   = require('./db/migrate');
+runMigration(db);
+
 const tasksRouter    = require('./routes/tasks');
 const missionsRouter = require('./routes/missions');
 const configRouter   = require('./routes/config');

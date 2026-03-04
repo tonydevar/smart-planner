@@ -1,4 +1,4 @@
-export const CATEGORIES = ['explore', 'learn', 'build', 'integrate', 'reflect', 'office-hours', 'other'];
+export const CATEGORIES = ['explore', 'learn', 'build', 'integrate', 'office-hours', 'other'];
 export const PRIORITIES  = ['high', 'medium', 'low'];
 
 export const CATEGORY_COLORS = {
@@ -6,7 +6,6 @@ export const CATEGORY_COLORS = {
   learn:          '#3b82f6',
   build:          '#10b981',
   integrate:      '#f59e0b',
-  reflect:        '#ec4899',
   'office-hours': '#6366f1',
   other:          '#64748b',
 };
