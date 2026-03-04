@@ -6,7 +6,7 @@ const { detectCategory, estimateDuration, generateSubtasks } = require('../../ai
 const router = Router();
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'google/gemini-2.5-flash-preview-05-20';
+const MODEL = 'google/gemini-2.5-flash-lite';
 
 async function callOpenRouter(systemPrompt, userMessage) {
   const apiKey = process.env.OPENROUTER_API_KEY;
