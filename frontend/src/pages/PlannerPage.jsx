@@ -4,6 +4,7 @@ import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes } from '../uti
 import TaskModal from '../components/TaskModal.jsx';
 import MissionModal from '../components/MissionModal.jsx';
 import AllotmentModal from '../components/AllotmentModal.jsx';
+import ScheduleGrid from '../components/ScheduleGrid.jsx';
 import './PlannerPage.css';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -239,13 +240,9 @@ export default function PlannerPage() {
           <AllotmentConfig onEdit={() => setAllotModal(true)} />
         </aside>
 
-        {/* Main area (placeholder for Feature 3 schedule) */}
+        {/* Main area — daily schedule grid */}
         <main className="planner-main">
-          <div className="schedule-placeholder glass-card">
-            <div className="schedule-placeholder-icon">📅</div>
-            <h2>Schedule</h2>
-            <p>Daily schedule view coming in the next feature.</p>
-          </div>
+          <ScheduleGrid />
         </main>
       </div>
 

@@ -1,0 +1,207 @@
+/* ─── Container ───────────────────────────────────────────────────────────── */
+
+.schedule-grid {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+
+.sg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-glass);
+  flex-shrink: 0;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sg-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sg-date-icon {
+  font-size: 1.1rem;
+}
+
+.sg-date-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ─── Plan / Actual toggle ────────────────────────────────────────────────── */
+
+.sg-view-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.sg-toggle-btn {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background var(--transition), color var(--transition);
+}
+
+.sg-toggle-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sg-toggle-btn:not(.active):hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+/* ─── Generate button ─────────────────────────────────────────────────────── */
+
+.sg-generate-btn {
+  font-size: 0.85rem;
+  padding: 7px 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─── Error banner ────────────────────────────────────────────────────────── */
+
+.sg-error {
+  padding: 8px 20px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* ─── Scrollable table area ───────────────────────────────────────────────── */
+
+.sg-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sg-scroll::-webkit-scrollbar { width: 6px; }
+.sg-scroll::-webkit-scrollbar-track { background: transparent; }
+.sg-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.sg-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* ─── Table ───────────────────────────────────────────────────────────────── */
+
+.sg-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sg-th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  z-index: 1;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.sg-th-time  { width: 80px; }
+.sg-th-task  { width: 35%; }
+.sg-th-desc  { /* flex remaining */ }
+
+/* ─── Row styles ──────────────────────────────────────────────────────────── */
+
+.sg-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-left: 4px solid transparent;   /* placeholder — overridden inline for occupied */
+  transition: background var(--transition);
+}
+
+.sg-row-empty {
+  opacity: 0.45;
+}
+
+.sg-row-occupied {
+  opacity: 1;
+}
+
+.sg-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sg-td {
+  padding: 5px 12px;
+  vertical-align: middle;
+  font-size: 0.82rem;
+}
+
+.sg-td-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* ─── Task cell ───────────────────────────────────────────────────────────── */
+
+.sg-task-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sg-cat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sg-empty-label {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ─── Description cell ────────────────────────────────────────────────────── */
+
+.sg-task-desc {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
