@@ -7,11 +7,15 @@ function todayISO() {
 }
 
 const initialState = {
-  tasks:     [],
-  missions:  [],
+  tasks:      [],
+  missions:   [],
   allotments: {},
-  overrides:  [],
-  loading:   true,
+  schedule: {
+    date:    todayISO(),
+    planned: [],   // [{ id, slot_index, record_type, task_id, label, task }]
+    actual:  [],   // [{ id, slot_index, record_type, task_id, label, task }]
+  },
+  loading: true,
 };
 
 function reducer(state, action) {
@@ -42,15 +46,22 @@ function reducer(state, action) {
     case 'SET_ALLOTMENTS':
       return { ...state, allotments: action.payload };
 
-    case 'UPSERT_OVERRIDE': {
-      const { date, slot_index } = action.payload;
-      const existing = state.overrides.find(o => o.date === date && o.slot_index === slot_index);
-      return {
-        ...state,
-        overrides: existing
-          ? state.overrides.map(o => (o.date === date && o.slot_index === slot_index) ? action.payload : o)
-          : [...state.overrides, action.payload],
-      };
+    // ── Schedule ───────────────────────────────────────────────────────────
+    case 'SET_SCHEDULE':
+      return { ...state, schedule: { ...state.schedule, ...action.payload } };
+
+    case 'SET_PLANNED_SLOTS':
+      return { ...state, schedule: { ...state.schedule, planned: action.payload } };
+
+    case 'UPSERT_SLOT': {
+      const slot = action.payload;
+      const key  = slot.record_type === 'actual' ? 'actual' : 'planned';
+      const arr  = state.schedule[key];
+      const idx  = arr.findIndex(s => s.slot_index === slot.slot_index);
+      const next = idx >= 0
+        ? arr.map((s, i) => i === idx ? slot : s)
+        : [...arr, slot].sort((a, b) => a.slot_index - b.slot_index);
+      return { ...state, schedule: { ...state.schedule, [key]: next } };
     }
 
     default:
@@ -67,14 +78,33 @@ export function AppProvider({ children }) {
       fetch('/api/tasks').then(r => r.json()),
       fetch('/api/missions').then(r => r.json()),
       fetch('/api/config').then(r => r.json()),
-      fetch(`/api/schedule/overrides?date=${today}`).then(r => r.json()),
-    ]).then(([tasks, missions, config, overrides]) => {
+      fetch(`/api/schedule?date=${today}`).then(r => r.json()),
+    ]).then(([tasks, missions, config, schedule]) => {
+      const planned = schedule.planned || [];
+      const actual  = schedule.actual  || [];
+
       dispatch({ type: 'INIT', payload: {
         tasks,
         missions,
         allotments: config.allotments || {},
-        overrides,
+        schedule: { date: today, planned, actual },
       }});
+
+      // Auto-generate if no planned slots exist for today
+      if (planned.length === 0) {
+        fetch('/api/schedule/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: today }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.slots) {
+              dispatch({ type: 'SET_PLANNED_SLOTS', payload: data.slots });
+            }
+          })
+          .catch(() => {/* silent — no planned schedule today, that's OK */});
+      }
     }).catch(() => {
       dispatch({ type: 'INIT', payload: {} });
     });
@@ -199,18 +229,42 @@ export function AppProvider({ children }) {
     dispatch({ type: 'UPDATE_TASK', payload: task });
   }, []);
 
-  // ── Schedule overrides ────────────────────────────────────────────────────
+  // ── Schedule ──────────────────────────────────────────────────────────────
 
-  const upsertOverride = useCallback(async (data) => {
-    const res = await fetch('/api/schedule/overrides', {
+  const fetchSchedule = useCallback(async (date) => {
+    const res = await fetch(`/api/schedule?date=${date}`);
+    if (!res.ok) throw new Error('Failed to fetch schedule');
+    const data = await res.json();
+    dispatch({ type: 'SET_SCHEDULE', payload: {
+      date,
+      planned: data.planned || [],
+      actual:  data.actual  || [],
+    }});
+    return data;
+  }, []);
+
+  const generateSchedule = useCallback(async (date) => {
+    const res = await fetch('/api/schedule/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date }),
+    });
+    if (!res.ok) throw new Error('Failed to generate schedule');
+    const data = await res.json();
+    dispatch({ type: 'SET_PLANNED_SLOTS', payload: data.slots || [] });
+    return data.slots || [];
+  }, []);
+
+  const upsertSlot = useCallback(async (slotData) => {
+    const res = await fetch('/api/schedule/slots', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(slotData),
     });
-    if (!res.ok) throw new Error('Failed to upsert override');
-    const override = await res.json();
-    dispatch({ type: 'UPSERT_OVERRIDE', payload: override });
-    return override;
+    if (!res.ok) throw new Error('Failed to upsert slot');
+    const slot = await res.json();
+    dispatch({ type: 'UPSERT_SLOT', payload: slot });
+    return slot;
   }, []);
 
   return (
@@ -220,7 +274,7 @@ export function AppProvider({ children }) {
       createMission, updateMission, deleteMission,
       updateAllotments,
       addSubtask, updateSubtask, deleteSubtask,
-      upsertOverride,
+      fetchSchedule, generateSchedule, upsertSlot,
     }}>
       {children}
     </AppContext.Provider>
