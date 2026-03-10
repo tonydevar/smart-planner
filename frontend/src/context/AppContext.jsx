@@ -160,6 +160,18 @@ export function AppProvider({ children }) {
     if (!res.ok) throw new Error('Failed to toggle task');
     const task = await res.json();
     dispatch({ type: 'UPDATE_TASK', payload: task });
+    // Completing/un-completing a task changes the schedule — refetch it
+    const today = todayISO();
+    fetch(`/api/schedule?date=${today}`)
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'SET_SCHEDULE', payload: {
+        date:         today,
+        planned:      data.planned      || [],
+        actual:       data.actual       || [],
+        timeSlots:    data.timeSlots    || [],
+        flaggedTasks: data.flaggedTasks || [],
+      }}))
+      .catch(() => {});
     return task;
   }, []);
 
@@ -205,6 +217,23 @@ export function AppProvider({ children }) {
     if (!res.ok) throw new Error('Failed to update allotments');
     const data = await res.json();
     dispatch({ type: 'SET_ALLOTMENTS', payload: data.allotments });
+    // Allotment changes affect the schedule — regenerate and refetch
+    const today = todayISO();
+    fetch('/api/schedule/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: today }),
+    })
+      .then(() => fetch(`/api/schedule?date=${today}`))
+      .then(r => r.json())
+      .then(sched => dispatch({ type: 'SET_SCHEDULE', payload: {
+        date:         today,
+        planned:      sched.planned      || [],
+        actual:       sched.actual       || [],
+        timeSlots:    sched.timeSlots    || [],
+        flaggedTasks: sched.flaggedTasks || [],
+      }}))
+      .catch(() => {});
   }, []);
 
   // ── Subtasks ──────────────────────────────────────────────────────────────
