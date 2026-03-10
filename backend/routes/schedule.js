@@ -123,8 +123,8 @@ router.post('/generate', (req, res) => {
     VALUES (?, ?, ?, 'planned', ?, ?)
   `);
 
-  // Use scheduler service to compute flagged_overflow flags
-  const { flaggedTasks } = scheduler.generateSchedule(allotments);
+  // Use scheduler service to compute flagged_overflow flags (persist=true for POST generate)
+  const { flaggedTasks } = scheduler.generateSchedule(allotments, { persist: true });
   const scheduledTaskIds = new Set(slots.map(s => s.task_id));
 
   db.transaction(() => {
@@ -154,9 +154,9 @@ router.get('/', (req, res) => {
   const planned = db.prepare(SLOT_JOIN_SQL).all(date, 'planned');
   const actual  = db.prepare(SLOT_JOIN_SQL).all(date, 'actual');
 
-  // Derive timeSlots + flaggedTasks from the scheduler service (no DB writes here)
+  // Derive timeSlots + flaggedTasks from the scheduler service (no DB writes on GET)
   const allotments = scheduler.getAllotments();
-  const { timeSlots, flaggedTasks } = scheduler.generateSchedule(allotments);
+  const { timeSlots, flaggedTasks } = scheduler.generateSchedule(allotments, { persist: false });
 
   return res.json({
     planned:      formatSlots(planned),

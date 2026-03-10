@@ -16,7 +16,7 @@ const PRIORITY_ORDER   = { high: 0, medium: 1, low: 2 };
 const SLOT_DURATION    = 15;                // minutes per slot
 const START_HOUR       = 8;                 // 08:00
 const END_HOUR         = 20;               // 20:00 (8 PM)
-const CATEGORY_ORDER   = ['explore', 'learn', 'build', 'integrate', 'office-hours', 'other'];
+const CATEGORY_ORDER   = ['explore', 'learn', 'build', 'integrate', 'reflect', 'office-hours', 'other'];
 
 // ─── Time-slot helpers ────────────────────────────────────────────────────────
 
@@ -54,16 +54,20 @@ function generateTimeSlots() {
  * flagged_overflow = 1 in the database and returned in the flaggedTasks array.
  *
  * @param {Object} allotments — { category: minutes, ... }
+ * @param {Object} [opts]
+ * @param {boolean} [opts.persist=true] — when false, skip all DB writes (safe for GET)
  * @returns {{ timeSlots: Array, flaggedTasks: Array }}
  */
-function generateSchedule(allotments) {
+function generateSchedule(allotments, { persist = true } = {}) {
   // 1. Load all incomplete tasks ordered by created_at (FIFO within priority)
   const tasks = db.prepare(
     'SELECT * FROM tasks WHERE completed = 0 ORDER BY created_at ASC'
   ).all();
 
-  // 2. Reset all flagged_overflow flags before re-generating
-  db.prepare('UPDATE tasks SET flagged_overflow = 0').run();
+  // 2. Reset all flagged_overflow flags before re-generating (skip for dry-run / GET)
+  if (persist) {
+    db.prepare('UPDATE tasks SET flagged_overflow = 0').run();
+  }
 
   // 3. Group by category
   const byCategory = {};
@@ -136,8 +140,8 @@ function generateSchedule(allotments) {
     }
   }
 
-  // 6. Write flagged_overflow to database
-  if (flaggedTaskIds.size > 0) {
+  // 6. Write flagged_overflow to database (skip for dry-run / GET)
+  if (persist && flaggedTaskIds.size > 0) {
     const setFlag = db.prepare('UPDATE tasks SET flagged_overflow = 1 WHERE id = ?');
     const flagAll = db.transaction((ids) => {
       for (const id of ids) setFlag.run(id);

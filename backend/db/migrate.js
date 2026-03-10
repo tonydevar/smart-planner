@@ -127,6 +127,48 @@ function runMigration(db) {
       db.exec('PRAGMA user_version = 4');
     })();
   }
+
+  // ─── Migration 5: Re-add 'reflect' to tasks.category CHECK constraint ───────
+  // Migration 1 removed reflect from the CHECK constraint; now we add it back
+  // per the PM spec. SQLite cannot ALTER a CHECK constraint so we recreate the
+  // table (WITH flagged_overflow, which was added in migration 3).
+  if (version < 5) {
+    db.pragma('foreign_keys = OFF');
+
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE tasks_m5 (
+          id                TEXT PRIMARY KEY,
+          mission_id        TEXT REFERENCES missions(id) ON DELETE SET NULL,
+          name              TEXT NOT NULL,
+          description       TEXT NOT NULL DEFAULT '',
+          priority          TEXT NOT NULL DEFAULT 'medium'
+                            CHECK(priority IN ('high','medium','low')),
+          category          TEXT NOT NULL DEFAULT 'other'
+                            CHECK(category IN ('explore','learn','build','integrate','reflect','office-hours','other')),
+          estimated_minutes INTEGER NOT NULL DEFAULT 30,
+          completed         INTEGER NOT NULL DEFAULT 0,
+          flagged_overflow  INTEGER NOT NULL DEFAULT 0,
+          created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT INTO tasks_m5
+          SELECT id, mission_id, name, description, priority, category,
+                 estimated_minutes, completed, flagged_overflow, created_at, updated_at
+          FROM tasks;
+
+        DROP TABLE tasks;
+        ALTER TABLE tasks_m5 RENAME TO tasks;
+      `);
+
+      db.exec('PRAGMA user_version = 5');
+    })();
+
+    db.pragma('foreign_keys = ON');
+  }
 }
+
+module.exports = { runMigration };
 
 module.exports = { runMigration };
