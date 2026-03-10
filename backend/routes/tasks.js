@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { randomUUID } = require('crypto');
 const db = require('../db/database');
+const { generateSubtasksForTask } = require('../src/services/openrouter');
 
 const router = Router();
 
@@ -73,7 +74,31 @@ router.post('/', (req, res) => {
     insertSubtask.run(randomUUID(), id, s.name, s.completed ? 1 : 0, i);
   });
 
-  res.status(201).json(getTask(id));
+  const task = getTask(id);
+  res.status(201).json(task);
+
+  // Auto-generate subtasks in background (fire-and-forget) if none were provided
+  if (incomingSubtasks.length === 0) {
+    setImmediate(async () => {
+      try {
+        const { subtasks: generated } = await generateSubtasksForTask({
+          name,
+          description,
+          category,
+        });
+        if (!generated || generated.length === 0) return;
+
+        const insert = db.prepare(
+          'INSERT INTO subtasks (id, task_id, name, completed, sort_order) VALUES (?, ?, ?, 0, ?)'
+        );
+        db.transaction(() => {
+          generated.forEach((s, i) => insert.run(randomUUID(), id, s.name, i));
+        })();
+      } catch {
+        // Background failure is silent — subtasks can be generated manually later
+      }
+    });
+  }
 });
 
 // PUT /api/tasks/:id

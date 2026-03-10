@@ -1,115 +1,94 @@
 'use strict';
 
-const { Router } = require('express');
-const { detectCategory, estimateDuration, generateSubtasks } = require('../../ai-helper');
+/**
+ * ai.js — AI endpoints for Smart Planner
+ *
+ * All LLM calls are made server-side via the openrouter service.
+ * The API key is never sent to the frontend.
+ *
+ * POST /api/ai/estimate  — estimate task duration + suggest category/subtasks
+ * POST /api/ai/subtasks  — generate subtasks and persist them to DB
+ */
+
+const { Router }   = require('express');
+const { randomUUID } = require('crypto');
+const db           = require('../db/database');
+const { estimateTask, generateSubtasksForTask } = require('../src/services/openrouter');
 
 const router = Router();
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'google/gemini-2.5-flash-lite';
+// ─── POST /api/ai/estimate ────────────────────────────────────────────────────
 
-async function callOpenRouter(systemPrompt, userMessage) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-
-  const body = JSON.stringify({
-    model: MODEL,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ],
-  });
-
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://github.com/tonydevar/smart-planner',
-      'X-Title': 'Smart Planner',
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenRouter error ${response.status}: ${text}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Empty response from OpenRouter');
-  return JSON.parse(content);
-}
-
-// POST /api/ai/estimate
-// Returns { estimatedMinutes, suggestedCategory, suggestedSubtasks: [{ name }] }
+/**
+ * Accepts:  { name, description, category? }
+ * Returns:  { estimatedMinutes, reasoning, suggestedCategory, suggestedSubtasks, fallback? }
+ */
 router.post('/estimate', async (req, res) => {
-  const { name = '', description = '' } = req.body;
+  const { name = '', description = '', category = '' } = req.body;
 
-  const systemPrompt = `You are a task estimation assistant. Given a task name and description, respond ONLY with valid JSON in this exact shape:
-{
-  "estimatedMinutes": <integer>,
-  "suggestedCategory": "<one of: explore|learn|build|integrate|office-hours|other>",
-  "suggestedSubtasks": [{ "name": "<string>" }, ...]
-}
-Provide 3-5 subtasks. Be concise.`;
-
-  const userMessage = `Task name: ${name}\nDescription: ${description}`;
-
-  try {
-    const result = await callOpenRouter(systemPrompt, userMessage);
-
-    // Validate and normalise
-    const estimatedMinutes  = Number.isInteger(result.estimatedMinutes) ? result.estimatedMinutes : 30;
-    const suggestedCategory = result.suggestedCategory || detectCategory(name, description);
-    const suggestedSubtasks = Array.isArray(result.suggestedSubtasks)
-      ? result.suggestedSubtasks.map(s => ({ name: String(s.name || '') })).filter(s => s.name)
-      : [];
-
-    return res.json({ estimatedMinutes, suggestedCategory, suggestedSubtasks });
-  } catch {
-    // Keyword-based fallback
-    const category         = detectCategory(name, description);
-    const estimatedMinutes = estimateDuration(name, description, category);
-    const subtasks         = generateSubtasks(name, description, category);
-
-    return res.json({
-      estimatedMinutes,
-      suggestedCategory:  category,
-      suggestedSubtasks:  subtasks.map(s => ({ name: s.name })),
-    });
-  }
+  const result = await estimateTask({ name, description, category });
+  return res.json(result);
 });
 
-// POST /api/ai/subtasks
-// Returns { subtasks: [{ name }] }
+// ─── POST /api/ai/subtasks ────────────────────────────────────────────────────
+
+/**
+ * Accepts:  { taskId, name, description, category }
+ * Returns:  { subtasks: [{ id, task_id, name, completed, sort_order }], fallback? }
+ *
+ * Persists generated subtasks to the database. Skips names already present
+ * (avoids duplicates if called multiple times on the same task).
+ */
 router.post('/subtasks', async (req, res) => {
-  const { name = '', description = '', category = 'other' } = req.body;
+  const { taskId, name = '', description = '', category = 'other' } = req.body;
 
-  const systemPrompt = `You are a task breakdown assistant. Given a task name, description, and category, respond ONLY with valid JSON in this exact shape:
-{
-  "subtasks": [{ "name": "<string>" }, ...]
-}
-Provide 3-6 specific, actionable subtasks. Be concise.`;
-
-  const userMessage = `Task name: ${name}\nDescription: ${description}\nCategory: ${category}`;
-
-  try {
-    const result = await callOpenRouter(systemPrompt, userMessage);
-    const subtasks = Array.isArray(result.subtasks)
-      ? result.subtasks.map(s => ({ name: String(s.name || '') })).filter(s => s.name)
-      : [];
-
-    return res.json({ subtasks });
-  } catch {
-    // Keyword-based fallback
-    const detectedCategory = category || detectCategory(name, description);
-    const fallback         = generateSubtasks(name, description, detectedCategory);
-
-    return res.json({ subtasks: fallback.map(s => ({ name: s.name })) });
+  // Validate taskId if provided
+  if (taskId) {
+    const task = db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
   }
+
+  const { subtasks: generated, fallback } = await generateSubtasksForTask({ name, description, category });
+
+  if (!taskId) {
+    // No taskId supplied — just return the suggestions without persisting
+    const response = { subtasks: generated };
+    if (fallback) response.fallback = true;
+    return res.json(response);
+  }
+
+  // Persist to DB (skip duplicates by name, case-insensitive)
+  const existing = db.prepare(
+    'SELECT name FROM subtasks WHERE task_id = ?'
+  ).all(taskId).map(s => s.name.toLowerCase());
+
+  const maxOrderRow = db.prepare(
+    'SELECT COALESCE(MAX(sort_order), -1) AS max FROM subtasks WHERE task_id = ?'
+  ).get(taskId);
+
+  let sortOrder = maxOrderRow.max + 1;
+
+  const insert = db.prepare(
+    'INSERT INTO subtasks (id, task_id, name, completed, sort_order) VALUES (?, ?, ?, 0, ?)'
+  );
+
+  const created = [];
+  const insertAll = db.transaction(() => {
+    for (const s of generated) {
+      if (existing.includes(s.name.toLowerCase())) continue;
+      const sid = randomUUID();
+      insert.run(sid, taskId, s.name, sortOrder++);
+      created.push(db.prepare('SELECT * FROM subtasks WHERE id = ?').get(sid));
+    }
+  });
+  insertAll();
+
+  const response = {
+    subtasks: created.map(s => ({ ...s, completed: !!s.completed })),
+  };
+  if (fallback) response.fallback = true;
+
+  return res.json(response);
 });
 
 module.exports = router;
