@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS config (
 
 INSERT OR IGNORE INTO config (key, value) VALUES (
   'allotments',
-  '{"explore":60,"learn":120,"build":180,"integrate":60,"office-hours":60,"other":60}'
+  '{"explore":60,"learn":120,"build":180,"integrate":60,"reflect":30,"office-hours":60,"other":60}'
 );
 
 CREATE TABLE IF NOT EXISTS schedule_slots (

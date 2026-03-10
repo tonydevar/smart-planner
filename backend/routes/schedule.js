@@ -1,8 +1,9 @@
 'use strict';
 
-const { Router }    = require('express');
+const { Router }     = require('express');
 const { randomUUID } = require('crypto');
 const db             = require('../db/database');
+const scheduler      = require('../src/services/scheduler');
 
 const router = Router();
 
@@ -116,10 +117,15 @@ router.post('/generate', (req, res) => {
   }
 
   // 6. Persist — delete existing planned rows then bulk-insert inside a transaction
+  //    Also mark overflow tasks using the scheduler service.
   const insert = db.prepare(`
     INSERT INTO schedule_slots (id, date, slot_index, record_type, task_id, label)
     VALUES (?, ?, ?, 'planned', ?, ?)
   `);
+
+  // Use scheduler service to compute flagged_overflow flags
+  const { flaggedTasks } = scheduler.generateSchedule(allotments);
+  const scheduledTaskIds = new Set(slots.map(s => s.task_id));
 
   db.transaction(() => {
     db.prepare(
@@ -131,12 +137,15 @@ router.post('/generate', (req, res) => {
     }
   })();
 
-  // 7. Return the inserted slots joined with task data
+  // 7. Return the inserted slots joined with task data plus flaggedTasks
   const rows = db.prepare(SLOT_JOIN_SQL).all(date, 'planned');
-  return res.json({ slots: formatSlots(rows) });
+  return res.json({ slots: formatSlots(rows), flaggedTasks });
 });
 
 // ─── GET /api/schedule?date=YYYY-MM-DD ──────────────────────────────────────
+// Returns { planned, actual, timeSlots, flaggedTasks } so both the UI
+// (which uses planned/actual) and the spec contract (timeSlots/flaggedTasks)
+// are satisfied from a single endpoint.
 
 router.get('/', (req, res) => {
   const { date } = req.query;
@@ -145,9 +154,15 @@ router.get('/', (req, res) => {
   const planned = db.prepare(SLOT_JOIN_SQL).all(date, 'planned');
   const actual  = db.prepare(SLOT_JOIN_SQL).all(date, 'actual');
 
+  // Derive timeSlots + flaggedTasks from the scheduler service (no DB writes here)
+  const allotments = scheduler.getAllotments();
+  const { timeSlots, flaggedTasks } = scheduler.generateSchedule(allotments);
+
   return res.json({
-    planned: formatSlots(planned),
-    actual:  formatSlots(actual),
+    planned:      formatSlots(planned),
+    actual:       formatSlots(actual),
+    timeSlots,
+    flaggedTasks,
   });
 });
 

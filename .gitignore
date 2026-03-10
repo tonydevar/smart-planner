@@ -44,3 +44,6 @@ Thumbs.db
 tmp/
 temp/
 .cache/
+data/*.db
+data/*.db-shm
+data/*.db-wal
