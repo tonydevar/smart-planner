@@ -11,9 +11,11 @@ const initialState = {
   missions:   [],
   allotments: {},
   schedule: {
-    date:    todayISO(),
-    planned: [],   // [{ id, slot_index, record_type, task_id, label, task }]
-    actual:  [],   // [{ id, slot_index, record_type, task_id, label, task }]
+    date:         todayISO(),
+    planned:      [],   // [{ id, slot_index, record_type, task_id, label, task }]
+    actual:       [],   // [{ id, slot_index, record_type, task_id, label, task }]
+    timeSlots:    [],   // [{ time, display, tasks: [...] }] from scheduler service
+    flaggedTasks: [],   // tasks that exceeded their category allotment
   },
   loading: true,
 };
@@ -53,6 +55,12 @@ function reducer(state, action) {
     case 'SET_PLANNED_SLOTS':
       return { ...state, schedule: { ...state.schedule, planned: action.payload } };
 
+    case 'SET_TIME_SLOTS':
+      return { ...state, schedule: { ...state.schedule, timeSlots: action.payload } };
+
+    case 'SET_FLAGGED_TASKS':
+      return { ...state, schedule: { ...state.schedule, flaggedTasks: action.payload } };
+
     case 'UPSERT_SLOT': {
       const slot = action.payload;
       const key  = slot.record_type === 'actual' ? 'actual' : 'planned';
@@ -80,14 +88,16 @@ export function AppProvider({ children }) {
       fetch('/api/config').then(r => r.json()),
       fetch(`/api/schedule?date=${today}`).then(r => r.json()),
     ]).then(([tasks, missions, config, schedule]) => {
-      const planned = schedule.planned || [];
-      const actual  = schedule.actual  || [];
+      const planned      = schedule.planned      || [];
+      const actual       = schedule.actual       || [];
+      const timeSlots    = schedule.timeSlots    || [];
+      const flaggedTasks = schedule.flaggedTasks || [];
 
       dispatch({ type: 'INIT', payload: {
         tasks,
         missions,
         allotments: config.allotments || {},
-        schedule: { date: today, planned, actual },
+        schedule: { date: today, planned, actual, timeSlots, flaggedTasks },
       }});
 
       // Auto-generate if no planned slots exist for today
@@ -229,6 +239,36 @@ export function AppProvider({ children }) {
     dispatch({ type: 'UPDATE_TASK', payload: task });
   }, []);
 
+  const toggleSubtask = useCallback(async (taskId, subtaskId) => {
+    const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}/complete`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error('Failed to toggle subtask');
+    const task = await fetch(`/api/tasks/${taskId}`).then(r => r.json());
+    dispatch({ type: 'UPDATE_TASK', payload: task });
+    return task;
+  }, []);
+
+  const generateAiSubtasks = useCallback(async (taskId) => {
+    const task = await fetch(`/api/tasks/${taskId}`).then(r => r.json());
+    const res = await fetch('/api/ai/subtasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskId,
+        name:        task.name,
+        description: task.description || '',
+        category:    task.category,
+      }),
+    });
+    if (!res.ok) throw new Error('AI subtask generation failed');
+    const updated = await fetch(`/api/tasks/${taskId}`).then(r => r.json());
+    dispatch({ type: 'UPDATE_TASK', payload: updated });
+    return updated;
+  }, []);
+
   // ── Schedule ──────────────────────────────────────────────────────────────
 
   const fetchSchedule = useCallback(async (date) => {
@@ -237,8 +277,10 @@ export function AppProvider({ children }) {
     const data = await res.json();
     dispatch({ type: 'SET_SCHEDULE', payload: {
       date,
-      planned: data.planned || [],
-      actual:  data.actual  || [],
+      planned:      data.planned      || [],
+      actual:       data.actual       || [],
+      timeSlots:    data.timeSlots    || [],
+      flaggedTasks: data.flaggedTasks || [],
     }});
     return data;
   }, []);
@@ -273,7 +315,7 @@ export function AppProvider({ children }) {
       createTask, updateTask, deleteTask, toggleTask,
       createMission, updateMission, deleteMission,
       updateAllotments,
-      addSubtask, updateSubtask, deleteSubtask,
+      addSubtask, updateSubtask, deleteSubtask, toggleSubtask, generateAiSubtasks,
       fetchSchedule, generateSchedule, upsertSlot,
     }}>
       {children}
