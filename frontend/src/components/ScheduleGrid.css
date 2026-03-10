@@ -133,8 +133,8 @@
   border-bottom: 1px solid var(--border-glass);
 }
 
-.sg-th-time  { width: 80px; }
-.sg-th-task  { width: 55%; }
+.sg-th-time  { width: 120px; }
+.sg-th-task  { width: 50%; }
 .sg-th-cat   { /* flex remaining */ }
 
 /* ─── Row styles ──────────────────────────────────────────────────────────── */
@@ -172,17 +172,19 @@
 
 /* ─── Task cell ───────────────────────────────────────────────────────────── */
 
-.sg-task-name {
+/* sg-task-chips: vertical stack inside the task cell */
+.sg-task-chips { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+
+/* sg-task-chip: one task per line, flex row, truncates with ellipsis */
+.sg-task-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--text-primary);
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  gap: 5px;
+  min-width: 0;    /* allows flex child to shrink and truncate */
+  max-width: 100%;
 }
 
+/* sg-cat-dot: small color circle */
 .sg-cat-dot {
   width: 8px;
   height: 8px;
@@ -190,18 +192,61 @@
   flex-shrink: 0;
 }
 
+/* sg-task-name: spans the text, truncates with ellipsis if too long */
+.sg-task-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
 .sg-empty-label {
   color: var(--text-muted);
   font-style: italic;
 }
 
-/* ─── Description cell ────────────────────────────────────────────────────── */
-
-.sg-task-desc {
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* ─── Time cell (wide enough for range label "08:00 – 08:15") ────────────── */
+.sg-td-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  width: 100px;
 }
+
+/* ─── AllotmentSummary (progress bars above schedule table) ─────────────── */
+
+.allotment-summary {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+}
+
+.allotment-summary-header {
+  margin-bottom: 10px;
+}
+
+.allotment-summary-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.allotment-summary-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* allotment-bar-row, allotment-cat-dot, allotment-cat-name,
+   allotment-bar-track, allotment-bar-fill, allotment-bar-nums
+   are defined in PlannerPage.css and reused here (global CSS) */
+
+/* Override class for AllotmentSummary (uses allotment-bar-over not .over) */
+.allotment-bar-fill.allotment-bar-over { background: #ef4444 !important; }

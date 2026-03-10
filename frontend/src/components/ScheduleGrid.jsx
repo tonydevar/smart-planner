@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { CATEGORY_COLORS, todayISO } from '../utils.js';
 import FlaggedTasksBanner from './FlaggedTasksBanner.jsx';
+import AllotmentSummary from './AllotmentSummary.jsx';
 import './ScheduleGrid.css';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -39,6 +40,9 @@ export default function ScheduleGrid() {
 
   return (
     <div className="schedule-grid-container">
+      {/* Allotment summary progress bars */}
+      <AllotmentSummary />
+
       {/* Flagged tasks banner */}
       <FlaggedTasksBanner flaggedTasks={flaggedTasks} />
 
@@ -98,7 +102,7 @@ export default function ScheduleGrid() {
                       className={`sg-row ${hasTasks ? 'sg-row-occupied' : 'sg-row-empty'}`}
                       style={color ? { borderLeft: `3px solid ${color}` } : undefined}
                     >
-                      <td className="sg-td sg-td-time">{slot.time}</td>
+                      <td className="sg-td sg-td-time">{slot.display || slot.time}</td>
                       <td className="sg-td sg-td-task">
                         {hasTasks ? (
                           <div className="sg-task-chips">
