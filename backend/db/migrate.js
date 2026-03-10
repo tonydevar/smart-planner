@@ -100,6 +100,33 @@ function runMigration(db) {
 
     db.pragma('foreign_keys = ON');
   }
+
+  // ─── Migration 3: Add flagged_overflow column to tasks ──────────────────────
+  if (version < 3) {
+    db.transaction(() => {
+      db.exec(`
+        ALTER TABLE tasks ADD COLUMN flagged_overflow INTEGER NOT NULL DEFAULT 0;
+      `);
+      db.exec('PRAGMA user_version = 3');
+    })();
+  }
+
+  // ─── Migration 4: Ensure allotments config includes reflect:30 ──────────────
+  if (version < 4) {
+    db.transaction(() => {
+      const row = db.prepare("SELECT value FROM config WHERE key = 'allotments'").get();
+      if (row) {
+        const allotments = JSON.parse(row.value);
+        if (!('reflect' in allotments)) {
+          allotments.reflect = 30;
+          db.prepare(
+            "UPDATE config SET value = ? WHERE key = 'allotments'"
+          ).run(JSON.stringify(allotments));
+        }
+      }
+      db.exec('PRAGMA user_version = 4');
+    })();
+  }
 }
 
 module.exports = { runMigration };

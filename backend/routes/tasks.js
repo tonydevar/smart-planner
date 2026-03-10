@@ -113,6 +113,23 @@ router.put('/:id', (req, res) => {
   res.json(getTask(id));
 });
 
+// PUT /api/tasks/:id/complete — toggle completed status
+router.put('/:id/complete', (req, res) => {
+  const { id } = req.params;
+  const task = db.prepare('SELECT id, completed FROM tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  // Toggle: if body provides explicit value use it; otherwise flip current
+  const { completed } = req.body;
+  const newCompleted = completed !== undefined ? (completed ? 1 : 0) : (task.completed ? 0 : 1);
+
+  db.prepare(
+    'UPDATE tasks SET completed = ?, updated_at = ? WHERE id = ?'
+  ).run(newCompleted, new Date().toISOString(), id);
+
+  res.json(getTask(id));
+});
+
 // DELETE /api/tasks/:id
 router.delete('/:id', (req, res) => {
   const { id } = req.params;
@@ -166,6 +183,22 @@ router.put('/:id/subtasks/:sid', (req, res) => {
     params.push(sid);
     db.prepare(`UPDATE subtasks SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   }
+
+  const updated = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(sid);
+  res.json({ ...updated, completed: !!updated.completed });
+});
+
+// PUT /api/tasks/:id/subtasks/:sid/complete — toggle subtask completed
+router.put('/:id/subtasks/:sid/complete', (req, res) => {
+  const { id: taskId, sid } = req.params;
+  const subtask = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(sid, taskId);
+  if (!subtask) return res.status(404).json({ error: 'Subtask not found' });
+
+  // Toggle: if body provides explicit value use it; otherwise flip current
+  const { completed } = req.body;
+  const newCompleted = completed !== undefined ? (completed ? 1 : 0) : (subtask.completed ? 0 : 1);
+
+  db.prepare('UPDATE subtasks SET completed = ? WHERE id = ?').run(newCompleted, sid);
 
   const updated = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(sid);
   res.json({ ...updated, completed: !!updated.completed });
