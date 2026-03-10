@@ -404,6 +404,213 @@
   font-size: 0.85rem;
 }
 
+/* ─── Overflow badge ──────────────────────────────────────────────────────── */
+
+.task-overflow-badge {
+  font-size: 0.72rem;
+  color: #ef4444;
+  background: rgba(239,68,68,0.1);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* ─── SubtaskPanel (inline) ──────────────────────────────────────────────── */
+
+.subtask-panel {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-glass);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subtask-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.subtask-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.subtask-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.subtask-progress-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.subtask-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+.subtask-item:hover { background: rgba(255,255,255,0.04); }
+.subtask-item-done .subtask-item-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.subtask-checkbox { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.subtask-item-name { flex: 1; font-size: 0.85rem; color: var(--text-primary); }
+.subtask-delete { opacity: 0.3; padding: 2px 6px; font-size: 0.75rem; }
+.subtask-delete:hover { opacity: 1; color: #ef4444; }
+
+.subtask-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.subtask-add-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.subtask-ai-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.subtask-ai-btn {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  color: var(--text-secondary);
+}
+.subtask-ai-btn:hover { color: var(--accent); }
+.subtask-ai-error {
+  font-size: 0.78rem;
+  color: #ef4444;
+}
+
+/* ─── FlaggedTasksBanner ─────────────────────────────────────────────────── */
+
+.flagged-banner {
+  margin-bottom: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  border-radius: var(--radius) !important;
+  overflow: hidden;
+}
+
+.flagged-banner-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-align: left;
+}
+.flagged-banner-header:hover { background: rgba(239, 68, 68, 0.12); }
+.flagged-banner-icon { font-size: 1rem; }
+.flagged-banner-title { flex: 1; }
+.flagged-banner-chevron { color: var(--text-muted); font-size: 0.75rem; }
+
+.flagged-banner-body {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.flagged-banner-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.flagged-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.flagged-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+.flagged-cat-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.flagged-task-name { flex: 1; color: var(--text-primary); }
+.flagged-cat-pill {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.flagged-task-time {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ─── ScheduleGrid (8AM–8PM timeSlots) ──────────────────────────────────── */
+
+.schedule-grid-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.sg-task-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sg-task-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sg-cat-pill {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sg-partial-tag {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.sg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+.sg-empty-icon { font-size: 2rem; }
+
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 1023px) {

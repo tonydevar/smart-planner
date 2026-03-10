@@ -5,6 +5,7 @@ import TaskModal from '../components/TaskModal.jsx';
 import MissionModal from '../components/MissionModal.jsx';
 import AllotmentModal from '../components/AllotmentModal.jsx';
 import ScheduleGrid from '../components/ScheduleGrid.jsx';
+import SubtaskPanel from '../components/SubtaskPanel.jsx';
 import './PlannerPage.css';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -55,8 +56,12 @@ function MissionList({ selectedMissionId, onSelect, onEdit, onDelete }) {
 // ──────────────────────────────────────────────────────────────────────────────
 function TaskCard({ task, onEdit, onDelete }) {
   const { toggleTask } = useApp();
+  const [subtasksOpen, setSubtasksOpen] = useState(false);
+
   const catColor = CATEGORY_COLORS[task.category] || '#64748b';
   const priColor = PRIORITY_COLORS[task.priority] || '#f59e0b';
+  const subtaskCount = task.subtasks?.length || 0;
+  const completedCount = task.subtasks?.filter(s => s.completed).length || 0;
 
   return (
     <div className={`task-card ${task.completed ? 'task-done' : ''}`}>
@@ -69,6 +74,13 @@ function TaskCard({ task, onEdit, onDelete }) {
         />
         <span className="task-name">{task.name}</span>
         <div className="task-actions">
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={() => setSubtasksOpen(o => !o)}
+            title={subtasksOpen ? 'Hide subtasks' : 'Show subtasks'}
+          >
+            {subtasksOpen ? '▲' : '▼'}
+          </button>
           <button className="btn btn-ghost btn-icon" onClick={() => onEdit(task)} title="Edit">✎</button>
           <button className="btn btn-ghost btn-icon" onClick={() => onDelete(task.id)} title="Delete">🗑</button>
         </div>
@@ -87,12 +99,22 @@ function TaskCard({ task, onEdit, onDelete }) {
           {task.priority}
         </span>
         <span className="task-duration">⏱ {fmtMinutes(task.estimated_minutes)}</span>
-        {task.subtasks?.length > 0 && (
-          <span className="task-subtask-count">
-            ✓ {task.subtasks.filter(s => s.completed).length}/{task.subtasks.length}
-          </span>
+        {subtaskCount > 0 && (
+          <button
+            className="task-subtask-count"
+            onClick={() => setSubtasksOpen(o => !o)}
+            title="Toggle subtasks"
+          >
+            ✓ {completedCount}/{subtaskCount}
+          </button>
+        )}
+        {task.flagged_overflow === 1 && (
+          <span className="task-overflow-badge" title="Exceeds daily allotment">⚠️ overflow</span>
         )}
       </div>
+      {subtasksOpen && (
+        <SubtaskPanel task={task} />
+      )}
     </div>
   );
 }

@@ -19,12 +19,13 @@
   --text-muted:     #64748b;
 
   /* Category colours */
-  --cat-explore:      #7c5cff;
-  --cat-learn:        #3b82f6;
-  --cat-build:        #10b981;
-  --cat-integrate:    #f59e0b;
-  --cat-office-hours: #6366f1;
-  --cat-other:        #64748b;
+  --cat-explore:        #7c5cff;
+  --cat-learn:          #3b82f6;
+  --cat-build:          #10b981;
+  --cat-integrate:      #f59e0b;
+  --cat-reflect:        #ec4899;
+  --cat-office-hours:   #6366f1;
+  --cat-other:          #64748b;
 
   /* Priority */
   --pri-high:   #ef4444;

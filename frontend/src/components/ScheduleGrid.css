@@ -134,8 +134,8 @@
 }
 
 .sg-th-time  { width: 80px; }
-.sg-th-task  { width: 35%; }
-.sg-th-desc  { /* flex remaining */ }
+.sg-th-task  { width: 55%; }
+.sg-th-cat   { /* flex remaining */ }
 
 /* ─── Row styles ──────────────────────────────────────────────────────────── */
 
