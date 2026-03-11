@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes } from '../utils.js';
 import TaskModal from '../components/TaskModal.jsx';
@@ -149,7 +149,7 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// AllotmentConfig
+// AllotmentConfig (sidebar Daily Allotments — stays in sidebar)
 // ──────────────────────────────────────────────────────────────────────────────
 function AllotmentConfig({ onEdit }) {
   const { allotments, tasks } = useApp();
@@ -207,9 +207,23 @@ export default function PlannerPage() {
 
   const [selectedMission, setSelectedMission] = useState(null);
 
-  const [taskModal,     setTaskModal]     = useState(null);  // null | { task? }
-  const [missionModal,  setMissionModal]  = useState(null);  // null | { mission? }
-  const [allotModal,    setAllotModal]    = useState(false);
+  // Sidebar open by default on desktop (≥768px), closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
+
+  const [taskModal,    setTaskModal]    = useState(null);  // null | { task? }
+  const [missionModal, setMissionModal] = useState(null);  // null | { mission? }
+  const [allotModal,   setAllotModal]   = useState(false);
+
+  // Auto-close sidebar when viewport shrinks below 768px
+  useEffect(() => {
+    function handleResize() {
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   if (loading) {
     return (
@@ -225,6 +239,15 @@ export default function PlannerPage() {
       {/* Header */}
       <header className="planner-header glass-card">
         <div className="planner-logo">
+          {/* Hamburger / arrow toggle button */}
+          <button
+            className="sidebar-toggle btn btn-ghost btn-icon"
+            onClick={() => setSidebarOpen(o => !o)}
+            aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+          >
+            {sidebarOpen ? '◀' : '☰'}
+          </button>
           <span className="planner-logo-icon">🧠</span>
           <span className="planner-logo-text">Smart Planner</span>
         </div>
@@ -239,8 +262,17 @@ export default function PlannerPage() {
       </header>
 
       <div className="planner-body">
+        {/* Mobile backdrop — closes sidebar on tap */}
+        {sidebarOpen && (
+          <div
+            className="sidebar-backdrop"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Sidebar */}
-        <aside className="planner-sidebar glass-card">
+        <aside className={`planner-sidebar glass-card ${sidebarOpen ? 'sidebar-open' : ''}`}>
           <MissionList
             selectedMissionId={selectedMission}
             onSelect={setSelectedMission}

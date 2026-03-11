@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { CATEGORY_COLORS, todayISO } from '../utils.js';
 import FlaggedTasksBanner from './FlaggedTasksBanner.jsx';
-import AllotmentSummary from './AllotmentSummary.jsx';
 import './ScheduleGrid.css';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -40,9 +39,6 @@ export default function ScheduleGrid() {
 
   return (
     <div className="schedule-grid-container">
-      {/* Allotment summary progress bars */}
-      <AllotmentSummary />
-
       {/* Flagged tasks banner */}
       <FlaggedTasksBanner flaggedTasks={flaggedTasks} />
 
