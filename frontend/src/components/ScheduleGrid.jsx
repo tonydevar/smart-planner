@@ -153,6 +153,8 @@ export default function ScheduleGrid() {
   const [genError,     setGenError]     = useState('');
   const [viewMode,     setViewMode]     = useState('planned');   // 'planned' | 'actual'
   const [editingSlot,  setEditingSlot]  = useState(null);        // slot_index | null
+  const [draggingSlot, setDraggingSlot] = useState(null);        // slot_index being dragged
+  const [dragOverSlot, setDragOverSlot] = useState(null);        // slot_index being hovered
 
   const date         = schedule.date ?? todayISO();
   const flaggedTasks = schedule.flaggedTasks || [];
@@ -176,6 +178,71 @@ export default function ScheduleGrid() {
       setGenerating(false);
     }
   }, [date, generateSchedule, fetchSchedule]);
+
+  // ── HTML5 Drag-and-drop handlers ────────────────────────────────────────
+
+  function handleDragStart(e, idx) {
+    setDraggingSlot(idx);
+    e.dataTransfer.setData('text/plain', String(idx));
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragEnd() {
+    setDraggingSlot(null);
+    setDragOverSlot(null);
+  }
+
+  function handleDragOver(e, idx) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverSlot !== idx) setDragOverSlot(idx);
+  }
+
+  function handleDragLeave(e) {
+    // Only clear if truly leaving the row (not just entering a child element)
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverSlot(null);
+    }
+  }
+
+  async function handleDrop(e, targetIdx) {
+    e.preventDefault();
+    const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    setDragOverSlot(null);
+    setDraggingSlot(null);
+
+    // No-op: same slot
+    if (isNaN(sourceIdx) || sourceIdx === targetIdx) return;
+
+    const sourceSlot = slotMap[sourceIdx];
+    if (!sourceSlot || !sourceSlot.task_id) return; // nothing to move
+
+    const targetSlot = slotMap[targetIdx] || null;
+
+    try {
+      // Move source task to target slot
+      await upsertSlot({
+        date,
+        slot_index:  targetIdx,
+        record_type: viewMode,
+        task_id:     sourceSlot.task_id,
+        label:       sourceSlot.label    || null,
+        comments:    sourceSlot.comments || '',
+      });
+
+      // Clear the source slot (swap with target task if occupied, else clear)
+      await upsertSlot({
+        date,
+        slot_index:  sourceIdx,
+        record_type: viewMode,
+        task_id:     targetSlot?.task_id  || null,
+        label:       targetSlot?.label    || null,
+        comments:    targetSlot?.comments || '',
+      });
+    } catch {
+      // Silent — server state is authoritative; next fetchSchedule will reconcile
+    }
+  }
 
   return (
     <div className="schedule-grid-container">
@@ -252,30 +319,52 @@ export default function ScheduleGrid() {
                   );
                 }
 
-                const slot    = slotMap[idx] || null;
-                const hasTask = slot && slot.task_id;
-                const task    = slot?.task || null;
-                const color   = task ? (CATEGORY_COLORS[task.category] || '#64748b') : null;
+                const slot     = slotMap[idx] || null;
+                const hasTask  = slot && slot.task_id;
+                const task     = slot?.task || null;
+                const color    = task ? (CATEGORY_COLORS[task.category] || '#64748b') : null;
+                const isBreak  = task?.category === 'break';
+                const isDragging  = draggingSlot === idx;
+                const isDragOver  = dragOverSlot === idx;
+
+                // Build class list
+                const rowClasses = [
+                  'sg-row',
+                  hasTask  ? 'sg-row-occupied' : 'sg-row-empty',
+                  isBreak  ? 'sg-row-break'    : '',
+                  isDragging ? 'dragging'       : '',
+                  isDragOver ? 'drag-over'      : '',
+                ].filter(Boolean).join(' ');
 
                 return (
                   <tr
                     key={idx}
-                    className={`sg-row ${hasTask ? 'sg-row-occupied' : 'sg-row-empty'}`}
-                    style={color ? { borderLeft: `3px solid ${color}` } : undefined}
+                    className={rowClasses}
+                    style={!isBreak && color ? { borderLeft: `3px solid ${color}` } : undefined}
+                    draggable={hasTask}
+                    onDragStart={hasTask ? e => handleDragStart(e, idx) : undefined}
+                    onDragEnd={hasTask ? handleDragEnd : undefined}
+                    onDragOver={e => handleDragOver(e, idx)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={e => handleDrop(e, idx)}
                     onClick={() => {
                       if (hasTask) setEditingSlot(idx);
                     }}
-                    title={hasTask ? 'Click to edit' : undefined}
+                    title={hasTask ? 'Drag to reorder · Click to edit' : undefined}
                   >
                     <td className="sg-td sg-td-time">{display}</td>
                     <td className="sg-td sg-td-task">
                       {hasTask ? (
                         <div className="sg-task-chips">
                           <div className="sg-task-chip">
-                            <span
-                              className="sg-cat-dot"
-                              style={{ background: color }}
-                            />
+                            {isBreak ? (
+                              <span className="sg-break-icon">☕</span>
+                            ) : (
+                              <span
+                                className="sg-cat-dot"
+                                style={{ background: color }}
+                              />
+                            )}
                             <span className="sg-task-name">
                               {slot.label || task?.name || ''}
                             </span>
