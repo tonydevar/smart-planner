@@ -45,6 +45,7 @@ export default function TaskModal({ task, defaultMissionId, onClose }) {
 
   const [name,     setName]     = useState(task?.name || '');
   const [desc,     setDesc]     = useState(task?.description || '');
+  const [comments, setComments] = useState(task?.comments || '');
   const [priority, setPri]      = useState(task?.priority || 'medium');
   const [category, setCat]      = useState(task?.category || 'build');
   const [estMins,  setEstMins]  = useState(task?.estimated_minutes || 30);
@@ -110,6 +111,7 @@ export default function TaskModal({ task, defaultMissionId, onClose }) {
     const payload = {
       name: name.trim(),
       description: desc,
+      comments,
       priority,
       category,
       estimated_minutes: Number(estMins) || 30,
@@ -167,6 +169,17 @@ export default function TaskModal({ task, defaultMissionId, onClose }) {
               onChange={e => setDesc(e.target.value)}
               placeholder="Optional details…"
               rows={3}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Comments</label>
+            <textarea
+              className="form-control"
+              value={comments}
+              onChange={e => setComments(e.target.value)}
+              placeholder="Notes, context, links…"
+              rows={2}
             />
           </div>
 
