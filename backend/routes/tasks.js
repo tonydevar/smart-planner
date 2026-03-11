@@ -7,6 +7,14 @@ const { generateSubtasksForTask } = require('../src/services/openrouter');
 
 const router = Router();
 
+// ─── Application-level category allowlist ────────────────────────────────────
+// SQLite CHECK constraints cannot be altered without table recreation.
+// We enforce valid categories here in the route layer instead.
+// 'reflect' and 'break' are included per Issue #19.
+const VALID_CATEGORIES = [
+  'explore', 'learn', 'build', 'integrate', 'reflect', 'office-hours', 'break', 'other',
+];
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function getSubtasks(taskId) {
@@ -53,18 +61,22 @@ router.post('/', (req, res) => {
     estimated_minutes = 30,
     completed = 0,
     mission_id = null,
+    comments = '',
     subtasks: incomingSubtasks = [],
   } = req.body;
 
   if (!name) return res.status(400).json({ error: 'name is required' });
 
+  // Application-level category validation (supports reflect and break per Issue #19)
+  const resolvedCategory = VALID_CATEGORIES.includes(category) ? category : 'other';
+
   const id  = randomUUID();
   const now = new Date().toISOString();
 
   db.prepare(
-    `INSERT INTO tasks (id, mission_id, name, description, priority, category, estimated_minutes, completed, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, mission_id, name, description, priority, category, estimated_minutes, completed ? 1 : 0, now, now);
+    `INSERT INTO tasks (id, mission_id, name, description, priority, category, estimated_minutes, completed, comments, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, mission_id, name, description, priority, resolvedCategory, estimated_minutes, completed ? 1 : 0, comments, now, now);
 
   // Insert subtasks if provided
   const insertSubtask = db.prepare(
@@ -84,7 +96,7 @@ router.post('/', (req, res) => {
         const { subtasks: generated } = await generateSubtasksForTask({
           name,
           description,
-          category,
+          category: resolvedCategory,
         });
         if (!generated || generated.length === 0) return;
 
@@ -115,6 +127,7 @@ router.put('/:id', (req, res) => {
     estimated_minutes,
     completed,
     mission_id,
+    comments,
   } = req.body;
 
   const updates = [];
@@ -123,10 +136,16 @@ router.put('/:id', (req, res) => {
   if (name              !== undefined) { updates.push('name = ?');               params.push(name); }
   if (description       !== undefined) { updates.push('description = ?');        params.push(description); }
   if (priority          !== undefined) { updates.push('priority = ?');            params.push(priority); }
-  if (category          !== undefined) { updates.push('category = ?');            params.push(category); }
+  if (category          !== undefined) {
+    // Application-level validation — supports reflect and break per Issue #19
+    const resolvedCat = VALID_CATEGORIES.includes(category) ? category : 'other';
+    updates.push('category = ?');
+    params.push(resolvedCat);
+  }
   if (estimated_minutes !== undefined) { updates.push('estimated_minutes = ?');   params.push(estimated_minutes); }
   if (completed         !== undefined) { updates.push('completed = ?');            params.push(completed ? 1 : 0); }
   if (mission_id        !== undefined) { updates.push('mission_id = ?');           params.push(mission_id); }
+  if (comments          !== undefined) { updates.push('comments = ?');             params.push(comments); }
 
   if (updates.length > 0) {
     updates.push('updated_at = ?');

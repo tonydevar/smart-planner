@@ -22,7 +22,7 @@ const MAX_SLOT       = 95;   // 23:45
  */
 const SLOT_JOIN_SQL = `
   SELECT
-    ss.id, ss.date, ss.slot_index, ss.record_type, ss.task_id, ss.label,
+    ss.id, ss.date, ss.slot_index, ss.record_type, ss.task_id, ss.label, ss.comments,
     t.name        AS task_name,
     t.description AS task_description,
     t.category    AS task_category
@@ -40,6 +40,7 @@ function formatSlots(rows) {
     record_type: r.record_type,
     task_id:     r.task_id,
     label:       r.label,
+    comments:    r.comments || '',
     task: r.task_id ? {
       name:        r.task_name,
       description: r.task_description,
@@ -188,6 +189,7 @@ router.put('/slots', (req, res) => {
     record_type = 'planned',
     task_id     = null,
     label       = null,
+    comments    = '',
   } = req.body;
 
   if (!date || slot_index === undefined) {
@@ -204,19 +206,19 @@ router.put('/slots', (req, res) => {
 
   if (existing) {
     db.prepare(
-      `UPDATE schedule_slots SET task_id = ?, label = ?
+      `UPDATE schedule_slots SET task_id = ?, label = ?, comments = ?
        WHERE date = ? AND slot_index = ? AND record_type = ?`
-    ).run(task_id, label, date, slot_index, record_type);
+    ).run(task_id, label, comments, date, slot_index, record_type);
   } else {
     db.prepare(
-      `INSERT INTO schedule_slots (id, date, slot_index, record_type, task_id, label)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(randomUUID(), date, slot_index, record_type, task_id, label);
+      `INSERT INTO schedule_slots (id, date, slot_index, record_type, task_id, label, comments)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), date, slot_index, record_type, task_id, label, comments);
   }
 
   const row = db.prepare(`
     SELECT
-      ss.id, ss.date, ss.slot_index, ss.record_type, ss.task_id, ss.label,
+      ss.id, ss.date, ss.slot_index, ss.record_type, ss.task_id, ss.label, ss.comments,
       t.name AS task_name, t.description AS task_description, t.category AS task_category
     FROM schedule_slots ss
     LEFT JOIN tasks t ON t.id = ss.task_id
@@ -230,6 +232,7 @@ router.put('/slots', (req, res) => {
     record_type: row.record_type,
     task_id:     row.task_id,
     label:       row.label,
+    comments:    row.comments || '',
     task: row.task_id ? {
       name:        row.task_name,
       description: row.task_description,

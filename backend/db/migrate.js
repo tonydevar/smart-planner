@@ -127,6 +127,61 @@ function runMigration(db) {
       db.exec('PRAGMA user_version = 4');
     })();
   }
+
+  // ─── Migration 5: Remove restrictive category CHECK + add comments to tasks ───
+  // SQLite cannot ALTER a CHECK constraint, so we recreate the table.
+  // The category CHECK is replaced by application-level validation in routes/tasks.js
+  // (VALID_CATEGORIES allowlist) so 'reflect' and 'break' are now accepted.
+  // This migration also adds the 'comments' column in one shot.
+  if (version < 5) {
+    db.pragma('foreign_keys = OFF');
+
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE tasks_m5 (
+          id                TEXT PRIMARY KEY,
+          mission_id        TEXT REFERENCES missions(id) ON DELETE SET NULL,
+          name              TEXT NOT NULL,
+          description       TEXT NOT NULL DEFAULT '',
+          priority          TEXT NOT NULL DEFAULT 'medium'
+                            CHECK(priority IN ('high','medium','low')),
+          category          TEXT NOT NULL DEFAULT 'other',
+          estimated_minutes INTEGER NOT NULL DEFAULT 30,
+          completed         INTEGER NOT NULL DEFAULT 0,
+          flagged_overflow  INTEGER NOT NULL DEFAULT 0,
+          comments          TEXT NOT NULL DEFAULT '',
+          created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT INTO tasks_m5
+          SELECT
+            id, mission_id, name, description, priority, category,
+            estimated_minutes, completed, flagged_overflow, '', created_at, updated_at
+          FROM tasks;
+
+        DROP TABLE tasks;
+        ALTER TABLE tasks_m5 RENAME TO tasks;
+      `);
+
+      db.exec('PRAGMA user_version = 5');
+    })();
+
+    db.pragma('foreign_keys = ON');
+  }
+
+  // ─── Migration 6: Add 'comments' column to schedule_slots ────────────────────
+  // ALTER TABLE ... ADD COLUMN is idempotent when guarded with try/catch.
+  if (version < 6) {
+    db.transaction(() => {
+      try {
+        db.exec("ALTER TABLE schedule_slots ADD COLUMN comments TEXT NOT NULL DEFAULT ''");
+      } catch {
+        // Column already exists — safe to continue
+      }
+      db.exec('PRAGMA user_version = 6');
+    })();
+  }
 }
 
 module.exports = { runMigration };

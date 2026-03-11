@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   name              TEXT NOT NULL,
   description       TEXT NOT NULL DEFAULT '',
   priority          TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('high','medium','low')),
-  category          TEXT NOT NULL DEFAULT 'other'  CHECK(category IN ('explore','learn','build','integrate','office-hours','other')),
+  category          TEXT NOT NULL DEFAULT 'other',
   estimated_minutes INTEGER NOT NULL DEFAULT 30,
   completed         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
