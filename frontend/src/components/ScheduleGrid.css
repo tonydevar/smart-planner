@@ -300,6 +300,46 @@
   flex-shrink: 0;
 }
 
+/* ─── Drag-and-drop ──────────────────────────────────────────────────────── */
+
+/* Row being dragged: fade to indicate it's "in flight" */
+.sg-row.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+/* Occupied rows show grab cursor */
+.sg-row-occupied {
+  cursor: grab;
+}
+
+/* Drop target highlight: blue outline */
+.sg-row.drag-over {
+  background: rgba(59, 130, 246, 0.12) !important;
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.55);
+}
+
+/* ─── Break task visual style ─────────────────────────────────────────────── */
+
+.sg-row-break {
+  border-top:    1px dashed rgba(255, 255, 255, 0.2) !important;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.2) !important;
+  border-left:   3px solid #6b7280 !important;
+  opacity: 0.85;
+  background: rgba(107, 114, 128, 0.05);
+}
+
+.sg-row-break:hover {
+  background: rgba(107, 114, 128, 0.1) !important;
+}
+
+/* Coffee icon shown instead of category dot for break tasks */
+.sg-break-icon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
 /* ─── AllotmentSummary (progress bars above schedule table) ─────────────── */
 
 .allotment-summary {
