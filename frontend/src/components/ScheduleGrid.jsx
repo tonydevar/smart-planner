@@ -1,4 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
+import {
+  DndContext, DragOverlay,
+  useDraggable, useDroppable,
+  useSensors, useSensor, MouseSensor, TouchSensor,
+} from '@dnd-kit/core';
 import { useApp } from '../context/AppContext.jsx';
 import { CATEGORY_COLORS, todayISO } from '../utils.js';
 import FlaggedTasksBanner from './FlaggedTasksBanner.jsx';
@@ -201,16 +206,50 @@ function InlineEditRow({ slotIdx, slot, date, viewMode, tasks, upsertSlot, onCan
 
 // ─── ScheduleGrid ─────────────────────────────────────────────────────────────
 
-export default function ScheduleGrid() {
-  const { schedule, tasks, generateSchedule, fetchSchedule, upsertSlot } = useApp();
+// ─── DroppableRow ────────────────────────────────────────────────────────────
 
-  const [generating,   setGenerating]   = useState(false);
-  const [genError,     setGenError]     = useState('');
-  const [viewMode,     setViewMode]     = useState('planned');   // 'planned' | 'actual'
-  const [editingSlot,  setEditingSlot]  = useState(null);        // slot_index | null
-  const [creatingSlot, setCreatingSlot] = useState(null);        // slot_index | null
-  const [draggingSlot, setDraggingSlot] = useState(null);        // slot_index being dragged
-  const [dragOverSlot, setDragOverSlot] = useState(null);        // slot_index being hovered
+function DroppableRow({ idx, children, ...props }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'drop-' + idx });
+  return (
+    <tr ref={setNodeRef} data-drop-over={isOver ? 'true' : undefined} {...props}>
+      {children}
+    </tr>
+  );
+}
+
+// ─── DraggableRowHandle ──────────────────────────────────────────────────────
+
+function DraggableRowHandle({ idx, children }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: 'slot-' + idx });
+  return (
+    <div
+      ref={setNodeRef}
+      data-dragging={isDragging ? 'true' : undefined}
+      className="sg-drag-handle"
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── ScheduleGrid ─────────────────────────────────────────────────────────────
+
+export default function ScheduleGrid() {
+  const { schedule, tasks, generateSchedule, fetchSchedule, upsertSlot, upsertSlotBatch } = useApp();
+
+  const [generating,    setGenerating]   = useState(false);
+  const [genError,      setGenError]     = useState('');
+  const [viewMode,      setViewMode]     = useState('planned');   // 'planned' | 'actual'
+  const [editingSlot,   setEditingSlot]  = useState(null);        // slot_index | null
+  const [creatingSlot,  setCreatingSlot] = useState(null);        // slot_index | null
+  const [activeDragIdx, setActiveDragIdx] = useState(null);       // slot_index being dragged
+  const [selectedSlots, setSelectedSlots] = useState(new Set());  // Set<number>
+  const [lastClicked,   setLastClicked]  = useState(null);        // last slot clicked
+  const [shakingSlot,   setShakingSlot]  = useState(null);        // slot_index with shake anim
+  const [longPressActive, setLongPressActive] = useState(false);
+  const longPressTimer = useRef(null);
 
   const date         = schedule.date ?? todayISO();
   const flaggedTasks = schedule.flaggedTasks || [];
@@ -221,6 +260,12 @@ export default function ScheduleGrid() {
     : (schedule.planned || []);
   const slotMap = {};
   for (const s of viewSlots) slotMap[s.slot_index] = s;
+
+  // @dnd-kit sensors: mouse (desktop) + touch (mobile)
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -235,70 +280,117 @@ export default function ScheduleGrid() {
     }
   }, [date, generateSchedule, fetchSchedule]);
 
-  // ── HTML5 Drag-and-drop handlers ────────────────────────────────────────
-
-  function handleDragStart(e, idx) {
-    setDraggingSlot(idx);
-    e.dataTransfer.setData('text/plain', String(idx));
-    e.dataTransfer.effectAllowed = 'move';
+  function triggerShake(idx) {
+    setShakingSlot(idx);
+    setTimeout(() => setShakingSlot(null), 400);
   }
 
-  function handleDragEnd() {
-    setDraggingSlot(null);
-    setDragOverSlot(null);
-  }
+  // ── @dnd-kit DragEnd handler ─────────────────────────────────────────────
 
-  function handleDragOver(e, idx) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverSlot !== idx) setDragOverSlot(idx);
-  }
+  async function handleDndEnd({ active, over }) {
+    setActiveDragIdx(null);
+    if (!active || !over) return;
 
-  function handleDragLeave(e) {
-    // Only clear if truly leaving the row (not just entering a child element)
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDragOverSlot(null);
-    }
-  }
+    const sourceIdx = parseInt(active.id.replace('slot-', ''), 10);
+    const targetIdx = parseInt(over.id.replace('drop-', ''), 10);
 
-  async function handleDrop(e, targetIdx) {
-    e.preventDefault();
-    const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-    setDragOverSlot(null);
-    setDraggingSlot(null);
-
-    // No-op: same slot
-    if (isNaN(sourceIdx) || sourceIdx === targetIdx) return;
+    if (isNaN(sourceIdx) || isNaN(targetIdx) || sourceIdx === targetIdx) return;
 
     const sourceSlot = slotMap[sourceIdx];
-    if (!sourceSlot || !sourceSlot.task_id) return; // nothing to move
+    if (!sourceSlot?.task_id) return;
 
-    const targetSlot = slotMap[targetIdx] || null;
+    // ── Multi-row move ─────────────────────────────────────────────────────
+    if (selectedSlots.size > 1 && selectedSlots.has(sourceIdx)) {
+      const offset = targetIdx - sourceIdx;
+      const sortedSources = Array.from(selectedSlots).sort((a, b) => a - b);
+
+      // Validate: all targets must be in 32-79 and not occupied by non-selected slots
+      const invalid = sortedSources.some(s => {
+        const t = s + offset;
+        return t < START_SLOT_IDX || t > END_SLOT_IDX ||
+               (slotMap[t]?.task_id && !selectedSlots.has(t));
+      });
+      if (invalid) { triggerShake(targetIdx); return; }
+
+      // Build batch: moved slots + cleared source slots
+      const batchSlots = [];
+      for (const srcIdx of sortedSources) {
+        const tgtIdx  = srcIdx + offset;
+        const srcSlot = slotMap[srcIdx];
+        batchSlots.push({ slot_index: tgtIdx, task_id: srcSlot.task_id, label: srcSlot.label || null, comments: srcSlot.comments || '' });
+      }
+      // Clear sources that aren't also targets
+      const targetSet = new Set(sortedSources.map(s => s + offset));
+      for (const srcIdx of sortedSources) {
+        if (!targetSet.has(srcIdx)) {
+          batchSlots.push({ slot_index: srcIdx, task_id: null, label: null, comments: '' });
+        }
+      }
+
+      try {
+        await upsertSlotBatch({ date, record_type: viewMode, slots: batchSlots });
+        setSelectedSlots(new Set());
+      } catch { /* server authoritative */ }
+      return;
+    }
+
+    // ── Single-row move ────────────────────────────────────────────────────
+    const targetSlot = slotMap[targetIdx];
+    if (targetSlot?.task_id) { triggerShake(targetIdx); return; } // occupied → reject
 
     try {
-      // Move source task to target slot
-      await upsertSlot({
-        date,
-        slot_index:  targetIdx,
-        record_type: viewMode,
-        task_id:     sourceSlot.task_id,
-        label:       sourceSlot.label    || null,
-        comments:    sourceSlot.comments || '',
-      });
+      await upsertSlot({ date, slot_index: targetIdx, record_type: viewMode, task_id: sourceSlot.task_id, label: sourceSlot.label || null, comments: sourceSlot.comments || '' });
+      await upsertSlot({ date, slot_index: sourceIdx, record_type: viewMode, task_id: null, label: null, comments: '' });
+      setSelectedSlots(new Set());
+    } catch { /* server authoritative */ }
+  }
 
-      // Clear the source slot (swap with target task if occupied, else clear)
-      await upsertSlot({
-        date,
-        slot_index:  sourceIdx,
-        record_type: viewMode,
-        task_id:     targetSlot?.task_id  || null,
-        label:       targetSlot?.label    || null,
-        comments:    targetSlot?.comments || '',
-      });
-    } catch {
-      // Silent — server state is authoritative; next fetchSchedule will reconcile
+  // ── Multi-select (shift+click) ────────────────────────────────────────────
+
+  function handleRowClick(e, idx, hasTask) {
+    if (e.shiftKey && lastClicked !== null) {
+      // Range selection
+      const lo = Math.min(lastClicked, idx);
+      const hi = Math.max(lastClicked, idx);
+      const newSet = new Set();
+      for (let i = lo; i <= hi; i++) {
+        if (slotMap[i]?.task_id) newSet.add(i);
+      }
+      setSelectedSlots(newSet);
+    } else {
+      // Plain click
+      setSelectedSlots(new Set());
+      setLastClicked(idx);
+      if (hasTask) setEditingSlot(idx);
+      else setCreatingSlot(idx);
     }
   }
+
+  // ── Mobile long-press ─────────────────────────────────────────────────────
+
+  function handlePointerDown(idx, hasTask) {
+    if (!hasTask) return;
+    longPressTimer.current = setTimeout(() => {
+      setLongPressActive(true);
+      setSelectedSlots(prev => new Set([...prev, idx]));
+    }, 500);
+  }
+
+  function handlePointerUp() {
+    clearTimeout(longPressTimer.current);
+    setLongPressActive(false);
+  }
+
+  function handlePointerEnter(idx) {
+    if (!longPressActive) return;
+    if (slotMap[idx]?.task_id) {
+      setSelectedSlots(prev => new Set([...prev, idx]));
+    }
+  }
+
+  // Active drag task (for DragOverlay chip)
+  const activeDragSlot = activeDragIdx !== null ? slotMap[activeDragIdx] : null;
+  const activeDragTask = activeDragSlot?.task || null;
 
   return (
     <div className="schedule-grid-container">
@@ -348,127 +440,139 @@ export default function ScheduleGrid() {
 
         {/* ── Time Slots Table (8AM – 8PM, 48 slots) ──────────────────── */}
         <div className="sg-scroll">
-          <table className="sg-table">
-            <thead>
-              <tr>
-                <th className="sg-th sg-th-time">Time</th>
-                <th className="sg-th sg-th-task">Task</th>
-                <th className="sg-th sg-th-cat">Category</th>
-                <th className="sg-th sg-th-comments">Comments</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TIME_SLOT_DEFS.map(({ idx, display }) => {
-                // Inline create mode for this row (empty slot clicked)
-                if (creatingSlot === idx) {
+          <DndContext
+            sensors={sensors}
+            onDragStart={({ active }) => {
+              const idx = parseInt(active.id.replace('slot-', ''), 10);
+              setActiveDragIdx(isNaN(idx) ? null : idx);
+            }}
+            onDragEnd={handleDndEnd}
+            onDragCancel={() => setActiveDragIdx(null)}
+          >
+            <table className="sg-table">
+              <thead>
+                <tr>
+                  <th className="sg-th sg-th-time">Time</th>
+                  <th className="sg-th sg-th-task">Task</th>
+                  <th className="sg-th sg-th-cat">Category</th>
+                  <th className="sg-th sg-th-comments">Comments</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TIME_SLOT_DEFS.map(({ idx, display }) => {
+                  // Inline create mode for this row (empty slot clicked)
+                  if (creatingSlot === idx) {
+                    return (
+                      <InlineCreateRow
+                        key={idx}
+                        slotIdx={idx}
+                        date={date}
+                        viewMode={viewMode}
+                        onDone={() => setCreatingSlot(null)}
+                        onCancel={() => setCreatingSlot(null)}
+                      />
+                    );
+                  }
+
+                  // Inline edit mode for this row (occupied slot clicked)
+                  if (editingSlot === idx) {
+                    return (
+                      <InlineEditRow
+                        key={idx}
+                        slotIdx={idx}
+                        slot={slotMap[idx] || null}
+                        date={date}
+                        viewMode={viewMode}
+                        tasks={tasks}
+                        upsertSlot={upsertSlot}
+                        onCancel={() => setEditingSlot(null)}
+                      />
+                    );
+                  }
+
+                  const slot       = slotMap[idx] || null;
+                  const hasTask    = !!(slot?.task_id);
+                  const task       = slot?.task || null;
+                  const color      = task ? (CATEGORY_COLORS[task.category] || '#64748b') : null;
+                  const isBreak    = task?.category === 'break';
+                  const isSelected = selectedSlots.has(idx);
+                  const isShaking  = shakingSlot === idx;
+                  const isDragging = activeDragIdx === idx;
+
+                  const rowClasses = [
+                    'sg-row',
+                    hasTask    ? 'sg-row-occupied' : 'sg-row-empty',
+                    isBreak    ? 'sg-row-break'    : '',
+                    isSelected ? 'sg-row-selected' : '',
+                    isShaking  ? 'sg-row-shaking'  : '',
+                    isDragging ? 'sg-row-dragging' : '',
+                  ].filter(Boolean).join(' ');
+
                   return (
-                    <InlineCreateRow
+                    <DroppableRow
                       key={idx}
-                      slotIdx={idx}
-                      date={date}
-                      viewMode={viewMode}
-                      onDone={() => setCreatingSlot(null)}
-                      onCancel={() => setCreatingSlot(null)}
-                    />
+                      idx={idx}
+                      className={rowClasses}
+                      style={!isBreak && color ? { borderLeft: `3px solid ${color}` } : undefined}
+                      onClick={e => handleRowClick(e, idx, hasTask)}
+                      onPointerDown={() => handlePointerDown(idx, hasTask)}
+                      onPointerUp={handlePointerUp}
+                      onPointerEnter={() => handlePointerEnter(idx)}
+                      title={hasTask ? 'Drag to reorder · Click to edit · Shift+click to multi-select' : 'Click to add task'}
+                    >
+                      <td className="sg-td sg-td-time">{display}</td>
+                      <td className="sg-td sg-td-task">
+                        {hasTask ? (
+                          <DraggableRowHandle idx={idx}>
+                            <div className="sg-task-chips">
+                              <div className="sg-task-chip">
+                                {isBreak ? (
+                                  <span className="sg-break-icon">☕</span>
+                                ) : (
+                                  <span className="sg-cat-dot" style={{ background: color }} />
+                                )}
+                                <span className="sg-task-name">
+                                  {slot.label || task?.name || ''}
+                                </span>
+                              </div>
+                            </div>
+                          </DraggableRowHandle>
+                        ) : (
+                          <span className="sg-empty-label">—</span>
+                        )}
+                      </td>
+                      <td className="sg-td sg-td-cat">
+                        {task && (
+                          <span className="sg-cat-pill" style={{ background: `${color}22`, color }}>
+                            {task.category}
+                          </span>
+                        )}
+                      </td>
+                      <InlineCommentCell
+                        slot={slot}
+                        date={date}
+                        viewMode={viewMode}
+                        upsertSlot={upsertSlot}
+                      />
+                    </DroppableRow>
                   );
-                }
+                })}
+              </tbody>
+            </table>
 
-                // Inline edit mode for this row (occupied slot clicked)
-                if (editingSlot === idx) {
-                  return (
-                    <InlineEditRow
-                      key={idx}
-                      slotIdx={idx}
-                      slot={slotMap[idx] || null}
-                      date={date}
-                      viewMode={viewMode}
-                      tasks={tasks}
-                      upsertSlot={upsertSlot}
-                      onCancel={() => setEditingSlot(null)}
-                    />
-                  );
-                }
-
-                const slot     = slotMap[idx] || null;
-                const hasTask  = slot && slot.task_id;
-                const task     = slot?.task || null;
-                const color    = task ? (CATEGORY_COLORS[task.category] || '#64748b') : null;
-                const isBreak  = task?.category === 'break';
-                const isDragging  = draggingSlot === idx;
-                const isDragOver  = dragOverSlot === idx;
-
-                // Build class list
-                const rowClasses = [
-                  'sg-row',
-                  hasTask  ? 'sg-row-occupied' : 'sg-row-empty',
-                  isBreak  ? 'sg-row-break'    : '',
-                  isDragging ? 'dragging'       : '',
-                  isDragOver ? 'drag-over'      : '',
-                ].filter(Boolean).join(' ');
-
-                return (
-                  <tr
-                    key={idx}
-                    className={rowClasses}
-                    style={!isBreak && color ? { borderLeft: `3px solid ${color}` } : undefined}
-                    draggable={hasTask}
-                    onDragStart={hasTask ? e => handleDragStart(e, idx) : undefined}
-                    onDragEnd={hasTask ? handleDragEnd : undefined}
-                    onDragOver={e => handleDragOver(e, idx)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={e => handleDrop(e, idx)}
-                    onClick={() => {
-                      if (hasTask) setEditingSlot(idx);
-                      else setCreatingSlot(idx);
-                    }}
-                    title={hasTask ? 'Drag to reorder · Click to edit' : 'Click to add task'}
-                  >
-                    <td className="sg-td sg-td-time">{display}</td>
-                    <td className="sg-td sg-td-task">
-                      {hasTask ? (
-                        <div className="sg-task-chips">
-                          <div className="sg-task-chip">
-                            {isBreak ? (
-                              <span className="sg-break-icon">☕</span>
-                            ) : (
-                              <span
-                                className="sg-cat-dot"
-                                style={{ background: color }}
-                              />
-                            )}
-                            <span className="sg-task-name">
-                              {slot.label || task?.name || ''}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="sg-empty-label">—</span>
-                      )}
-                    </td>
-                    <td className="sg-td sg-td-cat">
-                      {task && (
-                        <span
-                          className="sg-cat-pill"
-                          style={{
-                            background: `${color}22`,
-                            color,
-                          }}
-                        >
-                          {task.category}
-                        </span>
-                      )}
-                    </td>
-                    <InlineCommentCell
-                      slot={slot}
-                      date={date}
-                      viewMode={viewMode}
-                      upsertSlot={upsertSlot}
-                    />
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+            {/* DragOverlay — floating chip showing dragged task name */}
+            <DragOverlay>
+              {activeDragTask ? (
+                <div className="sg-drag-overlay">
+                  <span
+                    className="sg-cat-dot"
+                    style={{ background: CATEGORY_COLORS[activeDragTask.category] || '#64748b' }}
+                  />
+                  <span className="sg-drag-overlay-name">{activeDragTask.name}</span>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
       </div>
     </div>
