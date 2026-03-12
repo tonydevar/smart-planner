@@ -236,12 +236,11 @@ function DraggableRowHandle({ idx, children }) {
 
 // ─── ScheduleGrid ─────────────────────────────────────────────────────────────
 
-export default function ScheduleGrid() {
+export default function ScheduleGrid({ viewMode = 'planned', setViewMode, externalShakeRef }) {
   const { schedule, tasks, generateSchedule, fetchSchedule, upsertSlot, upsertSlotBatch } = useApp();
 
   const [generating,    setGenerating]   = useState(false);
   const [genError,      setGenError]     = useState('');
-  const [viewMode,      setViewMode]     = useState('planned');   // 'planned' | 'actual'
   const [editingSlot,   setEditingSlot]  = useState(null);        // slot_index | null
   const [creatingSlot,  setCreatingSlot] = useState(null);        // slot_index | null
   const [activeDragIdx, setActiveDragIdx] = useState(null);       // slot_index being dragged
@@ -284,6 +283,11 @@ export default function ScheduleGrid() {
     setShakingSlot(idx);
     setTimeout(() => setShakingSlot(null), 400);
   }
+
+  // Expose triggerShake for parent (sidebar drop rejection)
+  React.useEffect(() => {
+    if (externalShakeRef) externalShakeRef.current = triggerShake;
+  });  // runs every render to keep ref up-to-date
 
   // ── @dnd-kit DragEnd handler ─────────────────────────────────────────────
 
@@ -410,13 +414,13 @@ export default function ScheduleGrid() {
             <div className="sg-view-toggle" role="group" aria-label="View mode">
               <button
                 className={`sg-toggle-btn ${viewMode === 'planned' ? 'active' : ''}`}
-                onClick={() => { setViewMode('planned'); setEditingSlot(null); }}
+                onClick={() => { setViewMode?.('planned'); setEditingSlot(null); }}
               >
                 Plan
               </button>
               <button
                 className={`sg-toggle-btn ${viewMode === 'actual' ? 'active' : ''}`}
-                onClick={() => { setViewMode('actual'); setEditingSlot(null); }}
+                onClick={() => { setViewMode?.('actual'); setEditingSlot(null); }}
               >
                 Actual
               </button>

@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  DndContext, DragOverlay,
+  useDraggable,
+  useSensors, useSensor, MouseSensor,
+} from '@dnd-kit/core';
 import { useApp } from '../context/AppContext.jsx';
-import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes } from '../utils.js';
+import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes, todayISO } from '../utils.js';
 import TaskModal from '../components/TaskModal.jsx';
 import MissionModal from '../components/MissionModal.jsx';
 import AllotmentModal from '../components/AllotmentModal.jsx';
@@ -122,6 +127,33 @@ function TaskCard({ task, onEdit, onDelete }) {
 // ──────────────────────────────────────────────────────────────────────────────
 // TaskList
 // ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// DraggableTaskCard — wraps TaskCard with @dnd-kit draggable (desktop only)
+// ──────────────────────────────────────────────────────────────────────────────
+function DraggableTaskCard({ task, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'task-' + task.id,
+    data: { type: 'sidebar-task', task },
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? 'task-card-ghost' : undefined}
+      {...attributes}
+      {...listeners}
+    >
+      <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} />
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
   const { tasks } = useApp();
   const filtered = selectedMissionId
@@ -140,7 +172,7 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
       ) : (
         <div className="task-list">
           {filtered.map(t => (
-            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
+            <DraggableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
           ))}
         </div>
       )}
@@ -203,9 +235,12 @@ function AllotmentConfig({ onEdit }) {
 // PlannerPage
 // ──────────────────────────────────────────────────────────────────────────────
 export default function PlannerPage() {
-  const { loading, deleteTask, deleteMission } = useApp();
+  const { loading, deleteTask, deleteMission, schedule, upsertSlot } = useApp();
 
   const [selectedMission, setSelectedMission] = useState(null);
+
+  // viewMode lifted from ScheduleGrid so PlannerPage can access it for sidebar drops
+  const [viewMode, setViewMode] = useState('planned');
 
   // Sidebar open by default on desktop (≥768px), closed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
@@ -213,6 +248,41 @@ export default function PlannerPage() {
   const [taskModal,    setTaskModal]    = useState(null);  // null | { task? }
   const [missionModal, setMissionModal] = useState(null);  // null | { mission? }
   const [allotModal,   setAllotModal]   = useState(false);
+
+  // Outer DnD — sidebar→schedule drag (MouseSensor only, desktop)
+  const mouseSensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 8 } }));
+  const [activeSidebarTask, setActiveSidebarTask] = useState(null); // task being dragged from sidebar
+  const shakeRef = useRef(null); // ref to ScheduleGrid's triggerShake
+
+  // Build slotMap at PlannerPage level for occupancy check during sidebar drops
+  const viewSlots = viewMode === 'actual'
+    ? (schedule?.actual  || [])
+    : (schedule?.planned || []);
+  const ppSlotMap = {};
+  for (const s of viewSlots) ppSlotMap[s.slot_index] = s;
+
+  function handleSidebarDragEnd({ active, over }) {
+    setActiveSidebarTask(null);
+    if (!active?.id?.startsWith?.('task-') || !over?.id?.startsWith?.('drop-')) return;
+
+    const taskId    = active.id.replace('task-', '');
+    const slotIndex = parseInt(over.id.replace('drop-', ''), 10);
+    if (isNaN(slotIndex)) return;
+
+    const targetSlot = ppSlotMap[slotIndex];
+    if (targetSlot?.task_id) {
+      // Occupied — trigger shake on that slot
+      shakeRef.current?.(slotIndex);
+      return;
+    }
+
+    upsertSlot({
+      date:        todayISO(),
+      slot_index:  slotIndex,
+      record_type: viewMode,
+      task_id:     taskId,
+    }).catch(() => { /* server authoritative */ });
+  }
 
   // Auto-close sidebar when viewport shrinks below 768px
   useEffect(() => {
@@ -235,6 +305,16 @@ export default function PlannerPage() {
   }
 
   return (
+    <DndContext
+      sensors={mouseSensors}
+      onDragStart={({ active }) => {
+        if (active?.id?.startsWith('task-')) {
+          setActiveSidebarTask(active.data?.current?.task || null);
+        }
+      }}
+      onDragEnd={handleSidebarDragEnd}
+      onDragCancel={() => setActiveSidebarTask(null)}
+    >
     <div className="planner-layout">
       {/* Header */}
       <header className="planner-header glass-card">
@@ -296,7 +376,11 @@ export default function PlannerPage() {
 
         {/* Main area — daily schedule grid */}
         <main className="planner-main">
-          <ScheduleGrid />
+          <ScheduleGrid
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            externalShakeRef={shakeRef}
+          />
         </main>
       </div>
 
@@ -317,6 +401,20 @@ export default function PlannerPage() {
       {allotModal && (
         <AllotmentModal onClose={() => setAllotModal(false)} />
       )}
+
+      {/* DragOverlay — floating chip during sidebar→schedule drag */}
+      <DragOverlay>
+        {activeSidebarTask ? (
+          <div className="sg-drag-overlay" style={{ pointerEvents: 'none' }}>
+            <span
+              className="sg-cat-dot"
+              style={{ background: CATEGORY_COLORS[activeSidebarTask.category] || '#64748b' }}
+            />
+            <span className="sg-drag-overlay-name">{activeSidebarTask.name}</span>
+          </div>
+        ) : null}
+      </DragOverlay>
     </div>
+    </DndContext>
   );
 }

@@ -717,3 +717,11 @@
   font-size: 1rem;
 }
 .sg-empty-icon { font-size: 2rem; }
+
+/* ─── Sidebar DnD (desktop only) ──────────────────────────────────────────── */
+
+/* Ghost style for task card being dragged */
+.task-card-ghost {
+  opacity: 0.4;
+  pointer-events: none;
+}
