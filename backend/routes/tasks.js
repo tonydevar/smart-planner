@@ -62,6 +62,7 @@ router.post('/', (req, res) => {
     completed = 0,
     mission_id = null,
     comments = '',
+    skip_ai = false,
     subtasks: incomingSubtasks = [],
   } = req.body;
 
@@ -90,7 +91,8 @@ router.post('/', (req, res) => {
   res.status(201).json(task);
 
   // Auto-generate subtasks in background (fire-and-forget) if none were provided
-  if (incomingSubtasks.length === 0) {
+  // skip_ai:true suppresses generation (e.g. inline-created tasks with name only)
+  if (incomingSubtasks.length === 0 && !skip_ai) {
     setImmediate(async () => {
       try {
         const { subtasks: generated } = await generateSubtasksForTask({

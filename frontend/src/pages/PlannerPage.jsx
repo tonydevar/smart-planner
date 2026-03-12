@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import {
+  DndContext, DragOverlay,
+  MouseSensor, useSensors, useSensor,
+} from '@dnd-kit/core';
+import { useDraggable } from '@dnd-kit/core';
 import { useApp } from '../context/AppContext.jsx';
-import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes } from '../utils.js';
+import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes, todayISO } from '../utils.js';
 import TaskModal from '../components/TaskModal.jsx';
 import MissionModal from '../components/MissionModal.jsx';
 import AllotmentModal from '../components/AllotmentModal.jsx';
@@ -54,6 +59,30 @@ function MissionList({ selectedMissionId, onSelect, onEdit, onDelete }) {
 // ──────────────────────────────────────────────────────────────────────────────
 // TaskCard
 // ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// DraggableTaskCard — wraps TaskCard with @dnd-kit drag (desktop/mouse only)
+// ──────────────────────────────────────────────────────────────────────────────
+function DraggableTaskCard({ task, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'task-' + task.id,
+    data: { type: 'sidebar-task', task },
+  });
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 9999, position: 'relative' }
+    : undefined;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? 'task-card-ghost' : ''}
+      {...attributes}
+      {...listeners}
+    >
+      <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} />
+    </div>
+  );
+}
+
 function TaskCard({ task, onEdit, onDelete }) {
   const { toggleTask } = useApp();
   const [subtasksOpen, setSubtasksOpen] = useState(false);
@@ -140,7 +169,7 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
       ) : (
         <div className="task-list">
           {filtered.map(t => (
-            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
+            <DraggableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
           ))}
         </div>
       )}
@@ -203,16 +232,71 @@ function AllotmentConfig({ onEdit }) {
 // PlannerPage
 // ──────────────────────────────────────────────────────────────────────────────
 export default function PlannerPage() {
-  const { loading, deleteTask, deleteMission } = useApp();
+  const { loading, deleteTask, deleteMission, schedule, upsertSlot } = useApp();
 
   const [selectedMission, setSelectedMission] = useState(null);
 
   // Sidebar open by default on desktop (≥768px), closed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
 
+  // viewMode lifted from ScheduleGrid so sidebar DnD can access it
+  const [viewMode,     setViewMode]    = useState('planned');
+
+  // Sidebar drag active task (for DragOverlay)
+  const [sidebarDragTask, setSidebarDragTask] = useState(null);
+
+  // Shake state for sidebar drops on occupied slots
+  const [shakingSlotExternal, setShakingSlotExternal] = useState(null);
+
   const [taskModal,    setTaskModal]    = useState(null);  // null | { task? }
   const [missionModal, setMissionModal] = useState(null);  // null | { mission? }
   const [allotModal,   setAllotModal]   = useState(false);
+
+  // Outer DndContext: MouseSensor only (desktop sidebar→schedule drag)
+  const mouseSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  // Build slotMap for the current viewMode (to check occupied before drop)
+  const viewSlots = viewMode === 'actual'
+    ? (schedule.actual  || [])
+    : (schedule.planned || []);
+  const slotMap = {};
+  for (const s of viewSlots) slotMap[s.slot_index] = s;
+
+  function handleSidebarDragStart({ active }) {
+    const taskData = active.data?.current?.task;
+    setSidebarDragTask(taskData || null);
+  }
+
+  function handleSidebarDragEnd({ active, over }) {
+    setSidebarDragTask(null);
+    if (!over) return;
+
+    const isSidebarTask  = String(active.id).startsWith('task-');
+    const isDropZone     = String(over.id).startsWith('drop-');
+
+    if (isSidebarTask && isDropZone) {
+      const taskId  = String(active.id).replace('task-', '');
+      const slotIdx = parseInt(String(over.id).replace('drop-', ''), 10);
+      if (isNaN(slotIdx)) return;
+
+      const targetSlot = slotMap[slotIdx];
+      if (targetSlot && targetSlot.task_id) {
+        // Occupied — shake and reject
+        setShakingSlotExternal(slotIdx);
+        setTimeout(() => setShakingSlotExternal(null), 400);
+        return;
+      }
+
+      upsertSlot({
+        date:        todayISO(),
+        slot_index:  slotIdx,
+        record_type: viewMode,
+        task_id:     taskId,
+      }).catch(() => {});
+    }
+  }
 
   // Auto-close sidebar when viewport shrinks below 768px
   useEffect(() => {
@@ -235,6 +319,11 @@ export default function PlannerPage() {
   }
 
   return (
+    <DndContext
+      sensors={mouseSensors}
+      onDragStart={handleSidebarDragStart}
+      onDragEnd={handleSidebarDragEnd}
+    >
     <div className="planner-layout">
       {/* Header */}
       <header className="planner-header glass-card">
@@ -296,9 +385,26 @@ export default function PlannerPage() {
 
         {/* Main area — daily schedule grid */}
         <main className="planner-main">
-          <ScheduleGrid />
+          <ScheduleGrid
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            shakingSlotExternal={shakingSlotExternal}
+          />
         </main>
       </div>
+
+      {/* DragOverlay — floating chip when dragging a sidebar task */}
+      <DragOverlay>
+        {sidebarDragTask ? (
+          <div className="sg-drag-overlay">
+            <span
+              className="sg-cat-dot"
+              style={{ background: CATEGORY_COLORS[sidebarDragTask.category] || '#64748b' }}
+            />
+            <span>{sidebarDragTask.name}</span>
+          </div>
+        ) : null}
+      </DragOverlay>
 
       {/* Modals */}
       {taskModal !== null && (
@@ -318,5 +424,6 @@ export default function PlannerPage() {
         <AllotmentModal onClose={() => setAllotModal(false)} />
       )}
     </div>
+    </DndContext>
   );
 }

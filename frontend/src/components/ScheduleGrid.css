@@ -300,24 +300,106 @@
   flex-shrink: 0;
 }
 
-/* ─── Drag-and-drop ──────────────────────────────────────────────────────── */
+/* ─── @dnd-kit drag-and-drop ─────────────────────────────────────────────── */
 
-/* Row being dragged: fade to indicate it's "in flight" */
-.sg-row.dragging {
-  opacity: 0.4;
-  cursor: grabbing;
-}
-
-/* Occupied rows show grab cursor */
+/* Occupied rows — pointer cursor (grab affordance provided by @dnd-kit) */
 .sg-row-occupied {
   cursor: grab;
 }
 
-/* Drop target highlight: blue outline */
-.sg-row.drag-over {
+/* Drop-zone highlight (via data-drop-over attribute set by DroppableRow) */
+.sg-row[data-drop-over="true"] {
   background: rgba(59, 130, 246, 0.12) !important;
   box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.55);
 }
+
+/* Row being dragged (via data-dragging attribute set by DraggableRowHandle) */
+.sg-row[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+/* ─── DragOverlay chip ─────────────────────────────────────────────────────── */
+
+.sg-drag-overlay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  cursor: grabbing;
+}
+
+/* ─── Multi-row selection ─────────────────────────────────────────────────── */
+
+.sg-row-selected {
+  outline: 2px solid rgba(124, 92, 255, 0.6);
+  outline-offset: -1px;
+}
+
+/* ─── Shake animation (rejected drop target) ──────────────────────────────── */
+
+@keyframes sg-shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.sg-row-shaking {
+  animation: sg-shake 0.35s ease;
+  background: rgba(239, 68, 68, 0.15) !important;
+}
+
+/* ─── Inline task creation ────────────────────────────────────────────────── */
+
+.sg-row-creating {
+  background: rgba(124, 92, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.35);
+}
+
+.sg-create-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.sg-create-input {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+
+.sg-create-input::placeholder { color: var(--text-muted); }
+.sg-create-input:focus { border-color: var(--accent); }
+
+/* "＋ Add task" hint on empty rows */
+.sg-add-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.78rem;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.sg-row-empty:hover .sg-add-hint { opacity: 1; }
 
 /* ─── Break task visual style ─────────────────────────────────────────────── */
 

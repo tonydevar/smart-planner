@@ -393,6 +393,13 @@
 .schedule-placeholder h2 { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
 .schedule-placeholder p { font-size: 0.9rem; color: var(--text-muted); }
 
+/* ─── Draggable task card (sidebar → schedule drag) ──────────────────────── */
+
+.task-card-ghost {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* ─── TaskModal extras ────────────────────────────────────────────────────── */
 
 .task-modal-box { max-width: 640px; }
