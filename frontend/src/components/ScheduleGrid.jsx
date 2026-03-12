@@ -71,6 +71,61 @@ function InlineCommentCell({ slot, date, viewMode, upsertSlot }) {
   );
 }
 
+// ─── InlineCreateRow ──────────────────────────────────────────────────────────
+
+function InlineCreateRow({ slotIdx, date, viewMode, onDone, onCancel }) {
+  const { createTask, upsertSlot } = useApp();
+  const [name, setName]     = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  async function handleSave() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      const newTask = await createTask({
+        name: trimmed,
+        category: 'other',
+        priority: 'medium',
+        estimated_minutes: 30,
+        skip_ai: true,
+      });
+      await upsertSlot({ date, slot_index: slotIdx, record_type: viewMode, task_id: newTask.id });
+      onDone();
+    } catch {
+      setSaving(false);
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
+    if (e.key === 'Escape') onCancel();
+  }
+
+  return (
+    <tr className="sg-row sg-row-creating">
+      <td className="sg-td sg-td-time" />
+      <td className="sg-td sg-td-task" colSpan={3}>
+        <div className="sg-create-form">
+          <input
+            autoFocus
+            className="sg-create-input"
+            placeholder="New task name…"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={saving}
+          />
+          <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !name.trim()}>
+            {saving ? '…' : 'Add'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={onCancel} disabled={saving}>✕</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // ─── InlineEditRow ─────────────────────────────────────────────────────────────
 // Replaces a table row when in edit mode.
 
@@ -153,6 +208,7 @@ export default function ScheduleGrid() {
   const [genError,     setGenError]     = useState('');
   const [viewMode,     setViewMode]     = useState('planned');   // 'planned' | 'actual'
   const [editingSlot,  setEditingSlot]  = useState(null);        // slot_index | null
+  const [creatingSlot, setCreatingSlot] = useState(null);        // slot_index | null
   const [draggingSlot, setDraggingSlot] = useState(null);        // slot_index being dragged
   const [dragOverSlot, setDragOverSlot] = useState(null);        // slot_index being hovered
 
@@ -303,7 +359,21 @@ export default function ScheduleGrid() {
             </thead>
             <tbody>
               {TIME_SLOT_DEFS.map(({ idx, display }) => {
-                // Inline edit mode for this row
+                // Inline create mode for this row (empty slot clicked)
+                if (creatingSlot === idx) {
+                  return (
+                    <InlineCreateRow
+                      key={idx}
+                      slotIdx={idx}
+                      date={date}
+                      viewMode={viewMode}
+                      onDone={() => setCreatingSlot(null)}
+                      onCancel={() => setCreatingSlot(null)}
+                    />
+                  );
+                }
+
+                // Inline edit mode for this row (occupied slot clicked)
                 if (editingSlot === idx) {
                   return (
                     <InlineEditRow
@@ -349,8 +419,9 @@ export default function ScheduleGrid() {
                     onDrop={e => handleDrop(e, idx)}
                     onClick={() => {
                       if (hasTask) setEditingSlot(idx);
+                      else setCreatingSlot(idx);
                     }}
-                    title={hasTask ? 'Drag to reorder · Click to edit' : undefined}
+                    title={hasTask ? 'Drag to reorder · Click to edit' : 'Click to add task'}
                   >
                     <td className="sg-td sg-td-time">{display}</td>
                     <td className="sg-td sg-td-task">
