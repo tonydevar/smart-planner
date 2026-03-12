@@ -180,6 +180,64 @@ router.delete('/', (req, res) => {
   return res.json({ deleted: result.changes });
 });
 
+// ─── PUT /api/schedule/slots/batch ───────────────────────────────────────────
+// MUST be registered before PUT /slots to prevent Express route shadowing.
+
+router.put('/slots/batch', (req, res) => {
+  const { date, record_type = 'planned', slots } = req.body;
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'date required (YYYY-MM-DD)' });
+  if (!['planned', 'actual'].includes(record_type))
+    return res.status(400).json({ error: 'record_type must be planned or actual' });
+  if (!Array.isArray(slots) || slots.length === 0 || slots.length > 96)
+    return res.status(400).json({ error: 'slots must be a non-empty array (max 96)' });
+
+  const affectedSlotIndices = [];
+
+  try {
+    db.transaction(() => {
+      for (const s of slots) {
+        const { slot_index, task_id = null, label = null, comments = '' } = s;
+        if (slot_index === undefined) throw new Error('slot_index required for each slot');
+
+        const existing = db.prepare(
+          'SELECT id FROM schedule_slots WHERE date = ? AND slot_index = ? AND record_type = ?'
+        ).get(date, slot_index, record_type);
+
+        if (existing) {
+          db.prepare(
+            `UPDATE schedule_slots SET task_id = ?, label = ?, comments = ?
+             WHERE date = ? AND slot_index = ? AND record_type = ?`
+          ).run(task_id, label, comments, date, slot_index, record_type);
+        } else {
+          db.prepare(
+            `INSERT INTO schedule_slots (id, date, slot_index, record_type, task_id, label, comments)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).run(randomUUID(), date, slot_index, record_type, task_id, label, comments);
+        }
+        affectedSlotIndices.push(slot_index);
+      }
+    })();
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  const placeholders = affectedSlotIndices.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT ss.id, ss.date, ss.slot_index, ss.record_type, ss.task_id, ss.label, ss.comments,
+           t.name        AS task_name,
+           t.description AS task_description,
+           t.category    AS task_category
+    FROM schedule_slots ss
+    LEFT JOIN tasks t ON t.id = ss.task_id
+    WHERE ss.date = ? AND ss.record_type = ? AND ss.slot_index IN (${placeholders})
+    ORDER BY ss.slot_index ASC
+  `).all(date, record_type, ...affectedSlotIndices);
+
+  return res.json({ slots: formatSlots(rows) });
+});
+
 // ─── PUT /api/schedule/slots ─────────────────────────────────────────────────
 
 router.put('/slots', (req, res) => {

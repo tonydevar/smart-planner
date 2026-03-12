@@ -338,6 +338,18 @@ export function AppProvider({ children }) {
     return slot;
   }, []);
 
+  const upsertSlotBatch = useCallback(async (batchData) => {
+    const res = await fetch('/api/schedule/slots/batch', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(batchData),
+    });
+    if (!res.ok) throw new Error('Batch upsert failed');
+    const { slots } = await res.json();
+    slots.forEach(slot => dispatch({ type: 'UPSERT_SLOT', payload: slot }));
+    return slots;
+  }, []);
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -345,7 +357,7 @@ export function AppProvider({ children }) {
       createMission, updateMission, deleteMission,
       updateAllotments,
       addSubtask, updateSubtask, deleteSubtask, toggleSubtask, generateAiSubtasks,
-      fetchSchedule, generateSchedule, upsertSlot,
+      fetchSchedule, generateSchedule, upsertSlot, upsertSlotBatch,
     }}>
       {children}
     </AppContext.Provider>
