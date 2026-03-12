@@ -1,0 +1,10 @@
+{
+  "serve": "frontend/dist",
+  "build": "cd frontend && npm install && npm run build",
+  "buildDir": ".",
+  "backend": {
+    "start": "cd backend && npm install && node server.js",
+    "port": 3002,
+    "healthCheck": "/api/health"
+  }
+}
