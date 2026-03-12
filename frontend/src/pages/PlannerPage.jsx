@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  DndContext, DragOverlay,
-  MouseSensor, useSensors, useSensor,
+  DndContext, DragOverlay, closestCenter,
+  MouseSensor, TouchSensor, useSensors, useSensor,
 } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { useApp } from '../context/AppContext.jsx';
@@ -9,7 +9,7 @@ import { CATEGORIES, CATEGORY_COLORS, PRIORITY_COLORS, fmtMinutes, todayISO } fr
 import TaskModal from '../components/TaskModal.jsx';
 import MissionModal from '../components/MissionModal.jsx';
 import AllotmentModal from '../components/AllotmentModal.jsx';
-import ScheduleGrid from '../components/ScheduleGrid.jsx';
+import ScheduleGrid, { START_SLOT_IDX, END_SLOT_IDX } from '../components/ScheduleGrid.jsx';
 import SubtaskPanel from '../components/SubtaskPanel.jsx';
 import './PlannerPage.css';
 
@@ -57,10 +57,7 @@ function MissionList({ selectedMissionId, onSelect, onEdit, onDelete }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// TaskCard
-// ──────────────────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-// DraggableTaskCard — wraps TaskCard with @dnd-kit drag (desktop/mouse only)
+// DraggableTaskCard — wraps TaskCard with @dnd-kit drag
 // ──────────────────────────────────────────────────────────────────────────────
 function DraggableTaskCard({ task, onEdit, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -178,12 +175,11 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// AllotmentConfig (sidebar Daily Allotments — stays in sidebar)
+// AllotmentConfig
 // ──────────────────────────────────────────────────────────────────────────────
 function AllotmentConfig({ onEdit }) {
   const { allotments, tasks } = useApp();
 
-  // Compute used minutes per category from incomplete tasks
   const usedPerCat = {};
   CATEGORIES.forEach(c => { usedPerCat[c] = 0; });
   tasks.filter(t => !t.completed).forEach(t => {
@@ -229,72 +225,187 @@ function AllotmentConfig({ onEdit }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// PlannerPage
+// PlannerPage — single DndContext for sidebar AND schedule drag
 // ──────────────────────────────────────────────────────────────────────────────
 export default function PlannerPage() {
-  const { loading, deleteTask, deleteMission, schedule, upsertSlot } = useApp();
+  const { loading, deleteTask, deleteMission, schedule, upsertSlot, upsertSlotBatch } = useApp();
 
   const [selectedMission, setSelectedMission] = useState(null);
 
   // Sidebar open by default on desktop (≥768px), closed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
 
-  // viewMode lifted from ScheduleGrid so sidebar DnD can access it
-  const [viewMode,     setViewMode]    = useState('planned');
+  // viewMode lifted so both sidebar DnD and ScheduleGrid can access it
+  const [viewMode, setViewMode] = useState('planned');
 
-  // Sidebar drag active task (for DragOverlay)
+  // Unified DnD state
+  const [activeDragId,   setActiveDragId]   = useState(null);
   const [sidebarDragTask, setSidebarDragTask] = useState(null);
 
-  // Shake state for sidebar drops on occupied slots
-  const [shakingSlotExternal, setShakingSlotExternal] = useState(null);
+  // Selected slots for multi-row drag (lifted from ScheduleGrid)
+  const [selectedSlots, setSelectedSlots] = useState(new Set());
 
-  const [taskModal,    setTaskModal]    = useState(null);  // null | { task? }
-  const [missionModal, setMissionModal] = useState(null);  // null | { mission? }
+  // Shaking slot (rejected drop) — unified for sidebar and schedule drops
+  const [shakingSlot, setShakingSlot] = useState(null);
+
+  const [taskModal,    setTaskModal]    = useState(null);
+  const [missionModal, setMissionModal] = useState(null);
   const [allotModal,   setAllotModal]   = useState(false);
 
-  // Outer DndContext: MouseSensor only (desktop sidebar→schedule drag)
-  const mouseSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } })
+  const scheduleGridRef = useRef(null);
+
+  // Single DndContext: Mouse + Touch sensors
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
-  // Build slotMap for the current viewMode (to check occupied before drop)
+  // Build slotMap for the current viewMode (used by both sidebar and schedule handlers)
   const viewSlots = viewMode === 'actual'
     ? (schedule.actual  || [])
     : (schedule.planned || []);
   const slotMap = {};
   for (const s of viewSlots) slotMap[s.slot_index] = s;
+  const date = schedule.date ?? todayISO();
 
-  function handleSidebarDragStart({ active }) {
-    const taskData = active.data?.current?.task;
-    setSidebarDragTask(taskData || null);
+  function triggerShake(idx) {
+    setShakingSlot(idx);
+    setTimeout(() => setShakingSlot(null), 400);
   }
 
-  function handleSidebarDragEnd({ active, over }) {
+  // ── Unified drag start ────────────────────────────────────────────────────
+  function handleDragStart({ active }) {
+    setActiveDragId(active.id);
+    const id = String(active.id);
+
+    if (id.startsWith('task-')) {
+      // Sidebar task drag
+      const taskData = active.data?.current?.task;
+      setSidebarDragTask(taskData || null);
+    }
+
+    // Clear any inline editing in the schedule grid
+    scheduleGridRef.current?.clearEditing();
+  }
+
+  // ── Unified drag end ──────────────────────────────────────────────────────
+  async function handleDragEnd({ active, over }) {
+    setActiveDragId(null);
     setSidebarDragTask(null);
     if (!over) return;
 
-    const isSidebarTask  = String(active.id).startsWith('task-');
-    const isDropZone     = String(over.id).startsWith('drop-');
+    const id = String(active.id);
 
-    if (isSidebarTask && isDropZone) {
-      const taskId  = String(active.id).replace('task-', '');
+    if (id.startsWith('task-')) {
+      // ── Sidebar → schedule drop ─────────────────────────────────────────
+      const isDropZone = String(over.id).startsWith('drop-');
+      if (!isDropZone) return;
+
+      const taskId  = id.replace('task-', '');
       const slotIdx = parseInt(String(over.id).replace('drop-', ''), 10);
       if (isNaN(slotIdx)) return;
 
       const targetSlot = slotMap[slotIdx];
       if (targetSlot && targetSlot.task_id) {
-        // Occupied — shake and reject
-        setShakingSlotExternal(slotIdx);
-        setTimeout(() => setShakingSlotExternal(null), 400);
+        triggerShake(slotIdx);
         return;
       }
 
       upsertSlot({
-        date:        todayISO(),
+        date,
         slot_index:  slotIdx,
         record_type: viewMode,
         task_id:     taskId,
       }).catch(() => {});
+
+    } else if (id.startsWith('slot-')) {
+      // ── Schedule row drag ───────────────────────────────────────────────
+      const sourceIdx = parseInt(id.replace('slot-', ''), 10);
+      const targetIdx = parseInt(String(over.id).replace('drop-', ''), 10);
+      if (isNaN(sourceIdx) || isNaN(targetIdx) || sourceIdx === targetIdx) return;
+
+      if (selectedSlots.size > 1 && selectedSlots.has(sourceIdx)) {
+        // ── Multi-row move ──────────────────────────────────────────────
+        const sorted = [...selectedSlots].sort((a, b) => a - b);
+        const offset = targetIdx - sourceIdx;
+        const targets = sorted.map(i => i + offset);
+
+        const invalid = targets.some(t =>
+          t < START_SLOT_IDX || t > END_SLOT_IDX ||
+          (slotMap[t] && slotMap[t].task_id && !selectedSlots.has(t))
+        );
+        if (invalid) { triggerShake(targetIdx); return; }
+
+        const batchSlots = [];
+        sorted.forEach((src, i) => {
+          const srcSlot = slotMap[src];
+          batchSlots.push({
+            slot_index: targets[i],
+            task_id:    srcSlot?.task_id  || null,
+            label:      srcSlot?.label    || null,
+            comments:   srcSlot?.comments || '',
+          });
+        });
+        sorted.forEach(src => {
+          if (!targets.includes(src)) {
+            batchSlots.push({ slot_index: src, task_id: null, label: null, comments: '' });
+          }
+        });
+
+        try {
+          await upsertSlotBatch({ date, record_type: viewMode, slots: batchSlots });
+          setSelectedSlots(new Set());
+        } catch {
+          triggerShake(targetIdx);
+        }
+
+      } else {
+        // ── Single-row move ─────────────────────────────────────────────
+        const targetSlot = slotMap[targetIdx];
+        if (targetSlot && targetSlot.task_id) { triggerShake(targetIdx); return; }
+
+        const srcSlot = slotMap[sourceIdx];
+        if (!srcSlot || !srcSlot.task_id) return;
+
+        try {
+          await Promise.all([
+            upsertSlot({ date, slot_index: targetIdx, record_type: viewMode,
+                         task_id: srcSlot.task_id, label: srcSlot.label || null,
+                         comments: srcSlot.comments || '' }),
+            upsertSlot({ date, slot_index: sourceIdx, record_type: viewMode,
+                         task_id: null, label: null, comments: '' }),
+          ]);
+        } catch {
+          triggerShake(targetIdx);
+        }
+      }
+    }
+  }
+
+  // ── DragOverlay content ────────────────────────────────────────────────────
+  let overlayContent = null;
+  if (activeDragId) {
+    const id = String(activeDragId);
+    if (id.startsWith('task-') && sidebarDragTask) {
+      overlayContent = (
+        <div className="sg-drag-overlay">
+          <span className="sg-cat-dot"
+            style={{ background: CATEGORY_COLORS[sidebarDragTask.category] || '#64748b' }} />
+          <span>{sidebarDragTask.name}</span>
+        </div>
+      );
+    } else if (id.startsWith('slot-')) {
+      const slotIdx = parseInt(id.replace('slot-', ''), 10);
+      const slot = slotMap[slotIdx];
+      if (slot?.task) {
+        overlayContent = (
+          <div className="sg-drag-overlay">
+            <span className="sg-cat-dot"
+              style={{ background: CATEGORY_COLORS[slot.task.category] || '#64748b' }} />
+            <span>{slot.label || slot.task.name}</span>
+          </div>
+        );
+      }
     }
   }
 
@@ -320,110 +431,100 @@ export default function PlannerPage() {
 
   return (
     <DndContext
-      sensors={mouseSensors}
-      onDragStart={handleSidebarDragStart}
-      onDragEnd={handleSidebarDragEnd}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
-    <div className="planner-layout">
-      {/* Header */}
-      <header className="planner-header glass-card">
-        <div className="planner-logo">
-          {/* Hamburger / arrow toggle button */}
-          <button
-            className="sidebar-toggle btn btn-ghost btn-icon"
-            onClick={() => setSidebarOpen(o => !o)}
-            aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-            title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-          >
-            {sidebarOpen ? '◀' : '☰'}
-          </button>
-          <span className="planner-logo-icon">🧠</span>
-          <span className="planner-logo-text">Smart Planner</span>
-        </div>
-        <div className="planner-header-actions">
-          <button
-            className="btn btn-primary"
-            onClick={() => setTaskModal({ task: null })}
-          >
-            ＋ Add Task
-          </button>
-        </div>
-      </header>
+      <div className="planner-layout">
+        {/* Header */}
+        <header className="planner-header glass-card">
+          <div className="planner-logo">
+            <button
+              className="sidebar-toggle btn btn-ghost btn-icon"
+              onClick={() => setSidebarOpen(o => !o)}
+              aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            >
+              {sidebarOpen ? '◀' : '☰'}
+            </button>
+            <span className="planner-logo-icon">🧠</span>
+            <span className="planner-logo-text">Smart Planner</span>
+          </div>
+          <div className="planner-header-actions">
+            <button
+              className="btn btn-primary"
+              onClick={() => setTaskModal({ task: null })}
+            >
+              ＋ Add Task
+            </button>
+          </div>
+        </header>
 
-      <div className="planner-body">
-        {/* Mobile backdrop — closes sidebar on tap */}
-        {sidebarOpen && (
-          <div
-            className="sidebar-backdrop"
-            onClick={() => setSidebarOpen(false)}
-            aria-hidden="true"
+        <div className="planner-body">
+          {sidebarOpen && (
+            <div
+              className="sidebar-backdrop"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+
+          <aside className={`planner-sidebar glass-card ${sidebarOpen ? 'sidebar-open' : ''}`}>
+            <MissionList
+              selectedMissionId={selectedMission}
+              onSelect={setSelectedMission}
+              onEdit={mission => setMissionModal({ mission })}
+              onDelete={id => {
+                if (confirm('Delete this mission? Tasks will be unassigned.')) deleteMission(id);
+              }}
+            />
+
+            <TaskList
+              selectedMissionId={selectedMission}
+              onAdd={() => setTaskModal({ task: null, missionId: selectedMission })}
+              onEdit={task => setTaskModal({ task })}
+              onDelete={id => {
+                if (confirm('Delete this task?')) deleteTask(id);
+              }}
+            />
+
+            <AllotmentConfig onEdit={() => setAllotModal(true)} />
+          </aside>
+
+          <main className="planner-main">
+            <ScheduleGrid
+              ref={scheduleGridRef}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              selectedSlots={selectedSlots}
+              setSelectedSlots={setSelectedSlots}
+              shakingSlot={shakingSlot}
+            />
+          </main>
+        </div>
+
+        {/* Unified DragOverlay */}
+        <DragOverlay>{overlayContent}</DragOverlay>
+
+        {/* Modals */}
+        {taskModal !== null && (
+          <TaskModal
+            task={taskModal.task}
+            defaultMissionId={taskModal.missionId}
+            onClose={() => setTaskModal(null)}
           />
         )}
-
-        {/* Sidebar */}
-        <aside className={`planner-sidebar glass-card ${sidebarOpen ? 'sidebar-open' : ''}`}>
-          <MissionList
-            selectedMissionId={selectedMission}
-            onSelect={setSelectedMission}
-            onEdit={mission => setMissionModal({ mission })}
-            onDelete={id => {
-              if (confirm('Delete this mission? Tasks will be unassigned.')) deleteMission(id);
-            }}
+        {missionModal !== null && (
+          <MissionModal
+            mission={missionModal.mission}
+            onClose={() => setMissionModal(null)}
           />
-
-          <TaskList
-            selectedMissionId={selectedMission}
-            onAdd={() => setTaskModal({ task: null, missionId: selectedMission })}
-            onEdit={task => setTaskModal({ task })}
-            onDelete={id => {
-              if (confirm('Delete this task?')) deleteTask(id);
-            }}
-          />
-
-          <AllotmentConfig onEdit={() => setAllotModal(true)} />
-        </aside>
-
-        {/* Main area — daily schedule grid */}
-        <main className="planner-main">
-          <ScheduleGrid
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            shakingSlotExternal={shakingSlotExternal}
-          />
-        </main>
+        )}
+        {allotModal && (
+          <AllotmentModal onClose={() => setAllotModal(false)} />
+        )}
       </div>
-
-      {/* DragOverlay — floating chip when dragging a sidebar task */}
-      <DragOverlay>
-        {sidebarDragTask ? (
-          <div className="sg-drag-overlay">
-            <span
-              className="sg-cat-dot"
-              style={{ background: CATEGORY_COLORS[sidebarDragTask.category] || '#64748b' }}
-            />
-            <span>{sidebarDragTask.name}</span>
-          </div>
-        ) : null}
-      </DragOverlay>
-
-      {/* Modals */}
-      {taskModal !== null && (
-        <TaskModal
-          task={taskModal.task}
-          defaultMissionId={taskModal.missionId}
-          onClose={() => setTaskModal(null)}
-        />
-      )}
-      {missionModal !== null && (
-        <MissionModal
-          mission={missionModal.mission}
-          onClose={() => setMissionModal(null)}
-        />
-      )}
-      {allotModal && (
-        <AllotmentModal onClose={() => setAllotModal(false)} />
-      )}
-    </div>
     </DndContext>
   );
 }
