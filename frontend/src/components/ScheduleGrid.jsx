@@ -253,24 +253,24 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
   function handleRowClick(e, idx, hasTask) {
     if (creatingSlot !== null || editingSlot !== null) return;
 
-    if (e.shiftKey && lastClicked !== null) {
-      const lo = Math.min(lastClicked, idx);
-      const hi = Math.max(lastClicked, idx);
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl+Click (or Cmd+Click on Mac): toggle selection without opening any form
+      e.preventDefault();
+      e.stopPropagation();
       setSelectedSlots(prev => {
         const next = new Set(prev);
-        for (let i = lo; i <= hi; i++) next.add(i);
+        next.has(idx) ? next.delete(idx) : next.add(idx);
         return next;
       });
-    } else if (selectedSlots.size > 0 && !e.shiftKey) {
-      setSelectedSlots(new Set());
       setLastClicked(idx);
-      if (hasTask) setEditingSlot(idx);
-      else setCreatingSlot(idx);
-    } else {
-      setLastClicked(idx);
-      if (hasTask) setEditingSlot(idx);
-      else setCreatingSlot(idx);
+      return;
     }
+
+    // Plain click: clear selection, then handle slot action
+    if (selectedSlots.size > 0) setSelectedSlots(new Set());
+    setLastClicked(idx);
+    if (hasTask) setEditingSlot(idx);
+    else setCreatingSlot(idx);
   }
 
   return (
