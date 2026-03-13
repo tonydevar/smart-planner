@@ -228,7 +228,7 @@ function AllotmentConfig({ onEdit }) {
 // PlannerPage — single DndContext for sidebar AND schedule drag
 // ──────────────────────────────────────────────────────────────────────────────
 export default function PlannerPage() {
-  const { loading, deleteTask, deleteMission, schedule, upsertSlot, upsertSlotBatch } = useApp();
+  const { loading, tasks, deleteTask, deleteMission, schedule, upsertSlot, upsertSlotBatch } = useApp();
 
   const [selectedMission, setSelectedMission] = useState(null);
 
@@ -247,6 +247,10 @@ export default function PlannerPage() {
 
   // Shaking slot (rejected drop) — unified for sidebar and schedule drops
   const [shakingSlot, setShakingSlot] = useState(null);
+
+  // Capacity warning banner (sidebar → schedule drop fails)
+  const [capacityWarning, setCapacityWarning] = useState(null);
+  const capacityWarningTimer = useRef(null);
 
   const [taskModal,    setTaskModal]    = useState(null);
   const [missionModal, setMissionModal] = useState(null);
@@ -305,18 +309,40 @@ export default function PlannerPage() {
       const slotIdx = parseInt(String(over.id).replace('drop-', ''), 10);
       if (isNaN(slotIdx)) return;
 
-      const targetSlot = slotMap[slotIdx];
-      if (targetSlot && targetSlot.task_id) {
+      // Duration-aware multi-slot fill
+      // sidebarDragTask still references the captured closure value (setState is async)
+      const droppedTask = sidebarDragTask;
+      const taskName    = droppedTask?.name || 'Task';
+      const slotsNeeded = Math.ceil((droppedTask?.estimated_minutes || 30) / 15);
+      const requiredSlots = Array.from({ length: slotsNeeded }, (_, i) => slotIdx + i);
+
+      // Validate: all required slots within schedule window and unoccupied
+      const allValid = requiredSlots.every(
+        s => s >= START_SLOT_IDX && s <= END_SLOT_IDX && !(slotMap[s]?.task_id)
+      );
+
+      if (!allValid) {
+        // Count consecutive available (unoccupied + in-range) slots from slotIdx
+        let available = 0;
+        for (let s = slotIdx; s <= END_SLOT_IDX; s++) {
+          if (slotMap[s]?.task_id) break;
+          available++;
+        }
         triggerShake(slotIdx);
+        if (capacityWarningTimer.current) clearTimeout(capacityWarningTimer.current);
+        setCapacityWarning({ taskName, needed: slotsNeeded, available });
+        capacityWarningTimer.current = setTimeout(() => setCapacityWarning(null), 4000);
         return;
       }
 
-      upsertSlot({
-        date,
-        slot_index:  slotIdx,
-        record_type: viewMode,
-        task_id:     taskId,
-      }).catch(() => {});
+      // Build batch: first slot gets task name, subsequent slots get '[cont.]' label
+      const batchSlots = requiredSlots.map((s, i) => ({
+        slot_index: s,
+        task_id:    taskId,
+        label:      i === 0 ? null : '[cont.]',
+        comments:   '',
+      }));
+      upsertSlotBatch({ date, record_type: viewMode, slots: batchSlots }).catch(() => {});
 
     } else if (id.startsWith('slot-')) {
       // ── Schedule row drag ───────────────────────────────────────────────
@@ -493,6 +519,28 @@ export default function PlannerPage() {
           </aside>
 
           <main className="planner-main">
+            {capacityWarning && (
+              <div className="capacity-warning-banner">
+                <span className="capacity-warning-icon">⚠️</span>
+                <span className="capacity-warning-message">
+                  <strong>{capacityWarning.taskName}</strong> needs{' '}
+                  {capacityWarning.needed} slot{capacityWarning.needed !== 1 ? 's' : ''}{' '}
+                  ({capacityWarning.needed * 15} min) but only{' '}
+                  {capacityWarning.available} consecutive slot{capacityWarning.available !== 1 ? 's' : ''}{' '}
+                  available here.
+                </span>
+                <button
+                  className="capacity-warning-dismiss btn btn-ghost btn-icon btn-sm"
+                  onClick={() => {
+                    clearTimeout(capacityWarningTimer.current);
+                    setCapacityWarning(null);
+                  }}
+                  aria-label="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <ScheduleGrid
               ref={scheduleGridRef}
               viewMode={viewMode}
