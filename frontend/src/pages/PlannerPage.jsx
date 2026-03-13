@@ -16,7 +16,7 @@ import './PlannerPage.css';
 // ──────────────────────────────────────────────────────────────────────────────
 // MissionList
 // ──────────────────────────────────────────────────────────────────────────────
-function MissionList({ selectedMissionId, onSelect, onEdit, onDelete }) {
+function MissionList({ selectedMissionId, onSelect, onEdit, onDelete, open, onToggle }) {
   const { missions, tasks } = useApp();
 
   function missionMinutes(missionId) {
@@ -27,31 +27,40 @@ function MissionList({ selectedMissionId, onSelect, onEdit, onDelete }) {
 
   return (
     <div className="sidebar-section">
-      <div className="sidebar-section-header">
+      <button className="sidebar-section-header accordion-header" onClick={onToggle}>
         <span className="sidebar-section-title">Missions</span>
-        <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onEdit(null)} title="Add Mission">＋</button>
-      </div>
-
-      <button
-        className={`mission-item ${!selectedMissionId ? 'active' : ''}`}
-        onClick={() => onSelect(null)}
-      >
-        <span className="mission-name">All Tasks</span>
-        <span className="mission-mins">{fmtMinutes(tasks.reduce((s, t) => s + (t.estimated_minutes || 0), 0))}</span>
+        <div className="accordion-header-right">
+          <button
+            className="btn btn-ghost btn-sm btn-icon"
+            onClick={e => { e.stopPropagation(); onEdit(null); }}
+            title="Add Mission"
+          >＋</button>
+          <span className={`accordion-chevron${open ? ' open' : ''}`}>›</span>
+        </div>
       </button>
 
-      {missions.map(m => (
-        <div key={m.id} className={`mission-item ${selectedMissionId === m.id ? 'active' : ''}`}>
-          <button className="mission-item-body" onClick={() => onSelect(m.id)}>
-            <span className="mission-name">{m.name}</span>
-            <span className="mission-mins">{fmtMinutes(missionMinutes(m.id))}</span>
-          </button>
-          <div className="mission-actions">
-            <button className="btn btn-ghost btn-icon" onClick={() => onEdit(m)} title="Edit">✎</button>
-            <button className="btn btn-ghost btn-icon" onClick={() => onDelete(m.id)} title="Delete">🗑</button>
+      <div className={`accordion-body${open ? ' accordion-open' : ''}`}>
+        <button
+          className={`mission-item ${!selectedMissionId ? 'active' : ''}`}
+          onClick={() => onSelect(null)}
+        >
+          <span className="mission-name">All Tasks</span>
+          <span className="mission-mins">{fmtMinutes(tasks.reduce((s, t) => s + (t.estimated_minutes || 0), 0))}</span>
+        </button>
+
+        {missions.map(m => (
+          <div key={m.id} className={`mission-item ${selectedMissionId === m.id ? 'active' : ''}`}>
+            <button className="mission-item-body" onClick={() => onSelect(m.id)}>
+              <span className="mission-name">{m.name}</span>
+              <span className="mission-mins">{fmtMinutes(missionMinutes(m.id))}</span>
+            </button>
+            <div className="mission-actions">
+              <button className="btn btn-ghost btn-icon" onClick={() => onEdit(m)} title="Edit">✎</button>
+              <button className="btn btn-ghost btn-icon" onClick={() => onDelete(m.id)} title="Delete">🗑</button>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -148,7 +157,7 @@ function TaskCard({ task, onEdit, onDelete }) {
 // ──────────────────────────────────────────────────────────────────────────────
 // TaskList
 // ──────────────────────────────────────────────────────────────────────────────
-function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
+function TaskList({ selectedMissionId, onAdd, onEdit, onDelete, open, onToggle }) {
   const { tasks } = useApp();
   const filtered = selectedMissionId
     ? tasks.filter(t => t.mission_id === selectedMissionId)
@@ -156,20 +165,29 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
 
   return (
     <div className="sidebar-section tasks-section">
-      <div className="sidebar-section-header">
+      <button className="sidebar-section-header accordion-header" onClick={onToggle}>
         <span className="sidebar-section-title">Tasks</span>
-        <button className="btn btn-ghost btn-sm btn-icon" onClick={onAdd} title="Add Task">＋</button>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="tasks-empty">No tasks yet. Click ＋ to add one.</div>
-      ) : (
-        <div className="task-list">
-          {filtered.map(t => (
-            <DraggableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
-          ))}
+        <div className="accordion-header-right">
+          <button
+            className="btn btn-ghost btn-sm btn-icon"
+            onClick={e => { e.stopPropagation(); onAdd(); }}
+            title="Add Task"
+          >＋</button>
+          <span className={`accordion-chevron${open ? ' open' : ''}`}>›</span>
         </div>
-      )}
+      </button>
+
+      <div className={`accordion-body${open ? ' accordion-open' : ''}`}>
+        {filtered.length === 0 ? (
+          <div className="tasks-empty">No tasks yet. Click ＋ to add one.</div>
+        ) : (
+          <div className="task-list">
+            {filtered.map(t => (
+              <DraggableTaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -177,7 +195,7 @@ function TaskList({ selectedMissionId, onAdd, onEdit, onDelete }) {
 // ──────────────────────────────────────────────────────────────────────────────
 // AllotmentConfig
 // ──────────────────────────────────────────────────────────────────────────────
-function AllotmentConfig({ onEdit }) {
+function AllotmentConfig({ onEdit, open, onToggle }) {
   const { allotments, tasks } = useApp();
 
   const usedPerCat = {};
@@ -190,35 +208,43 @@ function AllotmentConfig({ onEdit }) {
 
   return (
     <div className="sidebar-section allotment-section">
-      <div className="sidebar-section-header">
+      <button className="sidebar-section-header accordion-header" onClick={onToggle}>
         <span className="sidebar-section-title">Daily Allotments</span>
-        <button className="btn btn-ghost btn-sm" onClick={onEdit}>Edit</button>
-      </div>
-      <div className="allotment-bars">
-        {CATEGORIES.map(cat => {
-          const allotted = allotments[cat] || 0;
-          const used     = usedPerCat[cat] || 0;
-          const pct      = allotted > 0 ? Math.min(100, (used / allotted) * 100) : 0;
-          const over     = used > allotted && allotted > 0;
-          const color    = CATEGORY_COLORS[cat];
-          return (
-            <div key={cat} className="allotment-bar-row">
-              <div className="allotment-bar-label">
-                <span className="allotment-cat-dot" style={{ background: color }} />
-                <span className="allotment-cat-name">{cat}</span>
+        <div className="accordion-header-right">
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={e => { e.stopPropagation(); onEdit(); }}
+          >Edit</button>
+          <span className={`accordion-chevron${open ? ' open' : ''}`}>›</span>
+        </div>
+      </button>
+      <div className={`accordion-body${open ? ' accordion-open' : ''}`}>
+        <div className="allotment-bars">
+          {CATEGORIES.map(cat => {
+            const allotted = allotments[cat] || 0;
+            const used     = usedPerCat[cat] || 0;
+            const pct      = allotted > 0 ? Math.min(100, (used / allotted) * 100) : 0;
+            const over     = used > allotted && allotted > 0;
+            const color    = CATEGORY_COLORS[cat];
+            return (
+              <div key={cat} className="allotment-bar-row">
+                <div className="allotment-bar-label">
+                  <span className="allotment-cat-dot" style={{ background: color }} />
+                  <span className="allotment-cat-name">{cat}</span>
+                </div>
+                <div className="allotment-bar-track">
+                  <div
+                    className={`allotment-bar-fill ${over ? 'over' : ''}`}
+                    style={{ width: `${pct}%`, background: over ? '#ef4444' : color }}
+                  />
+                </div>
+                <span className="allotment-bar-nums">
+                  {fmtMinutes(used)}/{fmtMinutes(allotted)}
+                </span>
               </div>
-              <div className="allotment-bar-track">
-                <div
-                  className={`allotment-bar-fill ${over ? 'over' : ''}`}
-                  style={{ width: `${pct}%`, background: over ? '#ef4444' : color }}
-                />
-              </div>
-              <span className="allotment-bar-nums">
-                {fmtMinutes(used)}/{fmtMinutes(allotted)}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -234,6 +260,11 @@ export default function PlannerPage() {
 
   // Sidebar open by default on desktop (≥768px), closed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
+
+  // Accordion section open states
+  const [missionOpen,    setMissionOpen]    = useState(false);
+  const [tasksOpen,      setTasksOpen]      = useState(true);
+  const [allotmentsOpen, setAllotmentsOpen] = useState(false);
 
   // viewMode lifted so both sidebar DnD and ScheduleGrid can access it
   const [viewMode, setViewMode] = useState('planned');
@@ -504,6 +535,8 @@ export default function PlannerPage() {
               onDelete={id => {
                 if (confirm('Delete this mission? Tasks will be unassigned.')) deleteMission(id);
               }}
+              open={missionOpen}
+              onToggle={() => setMissionOpen(o => !o)}
             />
 
             <TaskList
@@ -513,9 +546,15 @@ export default function PlannerPage() {
               onDelete={id => {
                 if (confirm('Delete this task?')) deleteTask(id);
               }}
+              open={tasksOpen}
+              onToggle={() => setTasksOpen(o => !o)}
             />
 
-            <AllotmentConfig onEdit={() => setAllotModal(true)} />
+            <AllotmentConfig
+              onEdit={() => setAllotModal(true)}
+              open={allotmentsOpen}
+              onToggle={() => setAllotmentsOpen(o => !o)}
+            />
           </aside>
 
           <main className="planner-main">

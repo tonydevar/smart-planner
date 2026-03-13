@@ -764,3 +764,50 @@
   opacity: 1;
   background: rgba(146, 64, 14, 0.1);
 }
+
+/* ─── Accordion sidebar sections ──────────────────────────────────────────── */
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--fg);
+  padding: 0;
+  text-align: left;
+}
+.accordion-header:hover { background: var(--muted-hover); }
+
+.accordion-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.accordion-chevron {
+  display: inline-block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: transform 200ms ease;
+  line-height: 1;
+  user-select: none;
+}
+.accordion-chevron.open {
+  transform: rotate(90deg);
+}
+
+.accordion-body {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 200ms ease, opacity 200ms ease;
+}
+.accordion-body.accordion-open {
+  max-height: 600px;
+  opacity: 1;
+}
