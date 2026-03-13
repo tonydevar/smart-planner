@@ -488,3 +488,38 @@
   outline: 2px dashed var(--primary);
   outline-offset: -1px;
 }
+
+/* ─── Per-cell inline editing ─────────────────────────────────────────────── */
+
+/* Editing cell highlight */
+.sg-td-editing {
+  background: #EFF6FF;
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  cursor: text;
+}
+
+/* Inline cell input (task name) */
+.sg-cell-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  outline: none;
+  padding: 2px 0;
+}
+
+/* Inline cell select (category) */
+.sg-cell-select {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  padding: 2px 0;
+}
