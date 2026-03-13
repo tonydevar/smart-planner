@@ -283,7 +283,7 @@
 }
 
 .sg-inline-input:focus {
-  background: var(--bg);
+  background: #fff;
   border-color: var(--primary);
 }
 
