@@ -16,6 +16,7 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  background: var(--bg);
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
@@ -31,6 +32,8 @@
   border-top: none;
   border-left: none;
   border-right: none;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
   z-index: 60;
   position: relative;
 }
@@ -44,10 +47,7 @@
 .planner-logo-text {
   font-size: 1.05rem;
   font-weight: 800;
-  background: linear-gradient(135deg, #7c5cff, #3b82f6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
 }
 
 /* Sidebar toggle button — visible at all breakpoints */
@@ -72,20 +72,13 @@
   position: relative;
 }
 
-/* ─── Mobile backdrop (covers main area when sidebar is open on small screens) */
+/* ─── Mobile backdrop ─────────────────────────────────────────────────────── */
 
 .sidebar-backdrop {
   display: none;
 }
 
 /* ─── Sidebar — mobile-first: hidden drawer ───────────────────────────────── */
-/*
-  On mobile (<768px):
-  - position: fixed, full height below the 60px header
-  - starts off-screen to the left (translateX(-100%))
-  - slides in to translateX(0) when .sidebar-open is applied
-  - z-index: 50 (above main content, below header z-index:60)
-*/
 
 .planner-sidebar {
   position: fixed;
@@ -105,6 +98,8 @@
   gap: 0;
   transform: translateX(-100%);
   transition: transform 250ms ease;
+  background: var(--muted);
+  border-right: 1px solid var(--border);
 }
 
 /* When open, slide into view */
@@ -118,12 +113,12 @@
     display: block;
     position: fixed;
     inset: 60px 0 0 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(17, 24, 39, 0.4);
     z-index: 40;
   }
 }
 
-/* ─── Main area — takes full width on mobile ──────────────────────────────── */
+/* ─── Main area ───────────────────────────────────────────────────────────── */
 
 .planner-main {
   flex: 1;
@@ -133,11 +128,11 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  /* Ensure full width when sidebar is in fixed/drawer mode (mobile) */
   width: 100%;
+  background: var(--muted);
 }
 
-/* ─── Tablet: sidebar is positioned and takes space in flow ──────────────── */
+/* ─── Tablet ──────────────────────────────────────────────────────────────── */
 
 @media (min-width: 768px) {
   .planner-header {
@@ -149,7 +144,6 @@
   }
 
   .planner-sidebar {
-    /* On tablet+: sidebar is part of normal flow, not fixed */
     position: relative;
     top: auto;
     left: auto;
@@ -179,7 +173,7 @@
 /* ─── Sidebar sections ────────────────────────────────────────────────────── */
 
 .sidebar-section {
-  border-bottom: 1px solid var(--border-glass);
+  border-bottom: 1px solid var(--border);
   padding: 12px 16px;
 }
 .sidebar-section:last-child { border-bottom: none; }
@@ -214,8 +208,11 @@
   width: 100%;
   gap: 4px;
 }
-.mission-item:hover { background: rgba(255,255,255,0.05); }
-.mission-item.active { background: rgba(124,92,255,0.15); border-left: 2px solid var(--accent); }
+.mission-item:hover { background: var(--muted-hover); }
+.mission-item.active {
+  background: var(--muted-hover);
+  border-left: 2px solid var(--primary);
+}
 
 .mission-item-body {
   display: flex;
@@ -242,7 +239,6 @@
 .mission-mins {
   font-size: 0.78rem;
   color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
   flex-shrink: 0;
 }
 .mission-actions {
@@ -268,13 +264,13 @@
 .task-list { display: flex; flex-direction: column; gap: 8px; }
 
 .task-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 10px 12px;
-  transition: transform var(--transition), box-shadow var(--transition);
+  transition: transform var(--transition);
 }
-.task-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.task-card:hover { transform: scale(1.02); }
 .task-card.task-done { opacity: 0.45; }
 
 .task-card-top {
@@ -287,7 +283,7 @@
 .task-checkbox {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
+  accent-color: var(--primary);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -319,7 +315,6 @@
 .task-duration, .task-subtask-count {
   font-size: 0.75rem;
   color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
 }
 
 /* ─── Allotment bars ──────────────────────────────────────────────────────── */
@@ -354,7 +349,7 @@
 .allotment-bar-track {
   flex: 1;
   height: 5px;
-  background: rgba(255,255,255,0.08);
+  background: var(--muted-hover);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -364,18 +359,17 @@
   border-radius: 3px;
   transition: width 0.4s ease;
 }
-.allotment-bar-fill.over { background: #ef4444 !important; }
+.allotment-bar-fill.over { background: var(--danger) !important; }
 
 .allotment-bar-nums {
   font-size: 0.68rem;
   color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
   width: 72px;
   text-align: right;
   flex-shrink: 0;
 }
 
-/* ─── Main area ───────────────────────────────────────────────────────────── */
+/* ─── Main area schedule placeholder ─────────────────────────────────────── */
 
 .schedule-placeholder {
   flex: 1;
@@ -417,8 +411,8 @@
 }
 
 .ai-panel {
-  background: rgba(124, 92, 255, 0.06);
-  border: 1px solid rgba(124, 92, 255, 0.2);
+  background: var(--muted);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 14px;
   display: flex;
@@ -464,13 +458,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg-elevated);
+  background: var(--muted);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
 }
 
 .subtask-checkbox {
-  accent-color: var(--accent);
+  accent-color: var(--primary);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -509,9 +503,9 @@
 /* ─── Shared ──────────────────────────────────────────────────────────────── */
 
 .error-msg {
-  background: rgba(239,68,68,0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239,68,68,0.25);
+  background: #FEF2F2;
+  color: var(--danger);
+  border: 1px solid #FECACA;
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   font-size: 0.85rem;
@@ -521,8 +515,8 @@
 
 .task-overflow-badge {
   font-size: 0.72rem;
-  color: #ef4444;
-  background: rgba(239,68,68,0.1);
+  color: var(--danger);
+  background: #FEF2F2;
   border-radius: 4px;
   padding: 1px 6px;
 }
@@ -532,7 +526,7 @@
 .subtask-panel {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-glass);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -546,13 +540,13 @@
 .subtask-progress-bar {
   flex: 1;
   height: 4px;
-  background: var(--bg-elevated);
+  background: var(--muted-hover);
   border-radius: 2px;
   overflow: hidden;
 }
 .subtask-progress-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--primary);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
@@ -573,19 +567,19 @@
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
-  background: var(--bg-elevated);
+  background: var(--muted);
   border-radius: var(--radius-sm);
   transition: background var(--transition);
 }
-.subtask-item:hover { background: rgba(255,255,255,0.04); }
+.subtask-item:hover { background: var(--muted-hover); }
 .subtask-item-done .subtask-item-name {
   text-decoration: line-through;
   color: var(--text-muted);
 }
-.subtask-checkbox { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.subtask-checkbox { accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
 .subtask-item-name { flex: 1; font-size: 0.85rem; color: var(--text-primary); }
 .subtask-delete { opacity: 0.3; padding: 2px 6px; font-size: 0.75rem; }
-.subtask-delete:hover { opacity: 1; color: #ef4444; }
+.subtask-delete:hover { opacity: 1; color: var(--danger); }
 
 .subtask-add-row {
   display: flex;
@@ -608,17 +602,17 @@
   padding: 4px 10px;
   color: var(--text-secondary);
 }
-.subtask-ai-btn:hover { color: var(--accent); }
+.subtask-ai-btn:hover { color: var(--primary); }
 .subtask-ai-error {
   font-size: 0.78rem;
-  color: #ef4444;
+  color: var(--danger);
 }
 
 /* ─── FlaggedTasksBanner ─────────────────────────────────────────────────── */
 
 .flagged-banner {
   margin-bottom: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  border: 1px solid #FECACA !important;
   border-radius: var(--radius) !important;
   overflow: hidden;
 }
@@ -629,15 +623,16 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: rgba(239, 68, 68, 0.08);
+  background: #FEF2F2;
   border: none;
   cursor: pointer;
   color: var(--text-primary);
   font-weight: 600;
   font-size: 0.88rem;
   text-align: left;
+  transition: background var(--transition);
 }
-.flagged-banner-header:hover { background: rgba(239, 68, 68, 0.12); }
+.flagged-banner-header:hover { background: #FEE2E2; }
 .flagged-banner-icon { font-size: 1rem; }
 .flagged-banner-title { flex: 1; }
 .flagged-banner-chevron { color: var(--text-muted); font-size: 0.75rem; }
@@ -647,6 +642,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  background: var(--bg);
 }
 .flagged-banner-hint {
   font-size: 0.82rem;
@@ -681,7 +677,7 @@
   flex-shrink: 0;
 }
 
-/* ─── ScheduleGrid ───────────────────────────────────────────────────────── */
+/* ─── ScheduleGrid (host container) ─────────────────────────────────────── */
 
 .schedule-grid-container {
   display: flex;
@@ -724,11 +720,3 @@
   font-size: 1rem;
 }
 .sg-empty-icon { font-size: 2rem; }
-
-/* ─── Sidebar DnD (desktop only) ──────────────────────────────────────────── */
-
-/* Ghost style for task card being dragged */
-.task-card-ghost {
-  opacity: 0.4;
-  pointer-events: none;
-}
