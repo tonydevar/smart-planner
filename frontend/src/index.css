@@ -2,23 +2,33 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  box-shadow: none !important;
 }
 
 :root {
-  /* Dark glassmorphism palette */
-  --bg-deep:       #0a0e17;
-  --bg-surface:    #12182b;
-  --bg-elevated:   #1a2238;
-  --bg-glass:      rgba(26, 34, 56, 0.7);
-  --border-glass:  rgba(255, 255, 255, 0.08);
-  --border-focus:  rgba(124, 92, 255, 0.6);
+  /* ── Flat design tokens ───────────────────────────────────────────────── */
+  --bg:              #FFFFFF;
+  --fg:              #111827;
+  --primary:         #3B82F6;
+  --primary-hover:   #2563EB;
+  --secondary:       #10B981;
+  --accent:          #F59E0B;
+  --muted:           #F3F4F6;
+  --muted-hover:     #E5E7EB;
+  --border:          #E5E7EB;
+  --danger:          #EF4444;
 
-  /* Text */
-  --text-primary:   #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted:     #64748b;
+  --text-primary:    #111827;
+  --text-secondary:  #6B7280;
+  --text-muted:      #9CA3AF;
 
-  /* Category colours */
+  --radius-sm: 6px;
+  --radius:    8px;
+  --radius-lg: 12px;
+
+  --transition: 200ms ease;
+
+  /* ── Category colours (retained unchanged) ───────────────────────────── */
   --cat-explore:        #7c5cff;
   --cat-learn:          #3b82f6;
   --cat-build:          #10b981;
@@ -28,23 +38,10 @@
   --cat-break:          #6b7280;
   --cat-other:          #64748b;
 
-  /* Priority */
+  /* ── Priority colours (retained unchanged) ───────────────────────────── */
   --pri-high:   #ef4444;
   --pri-medium: #f59e0b;
   --pri-low:    #22c55e;
-
-  /* Accent */
-  --accent:         #7c5cff;
-  --accent-hover:   #6d4ef0;
-  --accent-glow:    rgba(124, 92, 255, 0.25);
-
-  --radius-sm: 8px;
-  --radius:    12px;
-  --radius-lg: 16px;
-
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.7);
-  --transition: 150ms ease;
 }
 
 html, body, #root {
@@ -52,8 +49,8 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
-  background: var(--bg-deep);
+  font-family: 'Outfit', -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg);
   color: var(--text-primary);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -69,20 +66,17 @@ input, textarea, select {
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-hover); }
 
-/* Utility glass card */
+/* ── Flat card (replaces glass-card) ──────────────────────────────────── */
 .glass-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-glass);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-glass);
 }
 
-/* Buttons */
+/* ── Buttons ───────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -97,22 +91,23 @@ input, textarea, select {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), #3b82f6);
+  background: var(--primary);
   color: #fff;
-  box-shadow: 0 0 16px var(--accent-glow);
 }
-.btn-primary:hover {
-  background: linear-gradient(135deg, var(--accent-hover), #2563eb);
-  box-shadow: 0 0 24px var(--accent-glow);
-  transform: translateY(-1px);
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: scale(1.02);
 }
 
 .btn-secondary {
-  background: var(--bg-elevated);
+  background: var(--muted);
   color: var(--text-primary);
-  border: 1px solid var(--border-glass);
+  border: 1px solid var(--border);
 }
-.btn-secondary:hover { background: rgba(255,255,255,0.05); }
+.btn-secondary:hover:not(:disabled) {
+  background: var(--muted-hover);
+  transform: scale(1.02);
+}
 
 .btn-ghost {
   background: transparent;
@@ -120,33 +115,42 @@ input, textarea, select {
   border: none;
   padding: 6px 10px;
 }
-.btn-ghost:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--muted);
+  transform: scale(1.03);
+}
 
 .btn-danger {
-  background: rgba(239,68,68,0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239,68,68,0.3);
+  background: var(--danger);
+  color: #fff;
+  border: none;
 }
-.btn-danger:hover { background: rgba(239,68,68,0.25); }
+.btn-danger:hover:not(:disabled) {
+  background: #DC2626;
+  transform: scale(1.02);
+}
 
 .btn-sm { padding: 4px 10px; font-size: 0.8rem; border-radius: var(--radius-sm); }
 .btn-icon { padding: 6px; border-radius: var(--radius-sm); }
 
-/* Form controls */
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Form controls ─────────────────────────────────────────────────────── */
 .form-control {
   width: 100%;
   padding: 10px 14px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-glass);
+  background: var(--muted);
+  border: 1px solid transparent;
   border-radius: var(--radius);
   color: var(--text-primary);
   font-size: 0.93rem;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: background var(--transition), border-color var(--transition);
 }
 .form-control:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  background: #fff;
+  border: 2px solid var(--primary);
 }
 .form-control::placeholder { color: var(--text-muted); }
 textarea.form-control { resize: vertical; min-height: 80px; }
@@ -164,12 +168,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   color: var(--text-muted);
 }
 
-/* Modal overlay */
+/* ── Modal ─────────────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(17, 24, 39, 0.4);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -179,10 +182,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 
 .modal-box {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-glass);
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-modal);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
@@ -195,34 +197,34 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-glass);
+  border-bottom: 1px solid var(--border);
 }
-.modal-title { font-size: 1.1rem; font-weight: 700; }
+.modal-title { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
 .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 .modal-footer {
   padding: 16px 24px 20px;
-  border-top: 1px solid var(--border-glass);
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
-@keyframes fadeIn  { from { opacity: 0; }            to { opacity: 1; } }
-@keyframes scaleIn { from { transform: scale(0.95); } to { transform: scale(1); } }
+@keyframes fadeIn  { from { opacity: 0; }             to { opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0.97); } to { transform: scale(1); } }
 
-/* Spinner */
+/* ── Spinner ───────────────────────────────────────────────────────────── */
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(255,255,255,0.15);
-  border-top-color: var(--accent);
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Category pill */
+/* ── Category pill (border-radius:999px — spec exempts tags) ──────────── */
 .cat-pill {
   display: inline-flex;
   align-items: center;
@@ -234,7 +236,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   letter-spacing: 0.05em;
 }
 
-/* Priority badge */
+/* ── Priority badge (border-radius:999px — spec exempts tags) ─────────── */
 .pri-badge {
   display: inline-flex;
   align-items: center;
