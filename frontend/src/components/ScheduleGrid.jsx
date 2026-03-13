@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { useApp } from '../context/AppContext.jsx';
-import { CATEGORY_COLORS, todayISO } from '../utils.js';
+import { CATEGORIES, CATEGORY_COLORS, todayISO } from '../utils.js';
 import FlaggedTasksBanner from './FlaggedTasksBanner.jsx';
 import './ScheduleGrid.css';
 
@@ -125,56 +125,37 @@ function InlineCreateRow({ slotIdx, date, viewMode, onDone, onCancel }) {
   );
 }
 
-// ─── InlineEditRow ─────────────────────────────────────────────────────────────
+// ─── TaskNameInput — auto-select, Enter/blur saves, Escape cancels, Tab → next ─
 
-function InlineEditRow({ slotIdx, slot, date, viewMode, tasks, upsertSlot, onCancel }) {
-  const [taskId,   setTaskId]   = useState(slot?.task_id  || '');
-  const [label,    setLabel]    = useState(slot?.label    || '');
-  const [comments, setComments] = useState(slot?.comments || '');
-  const [saving,   setSaving]   = useState(false);
-  const def = TIME_SLOT_DEFS.find(d => d.idx === slotIdx);
+function TaskNameInput({ initialValue, onSave, onCancel, onTabNext }) {
+  const inputRef = useRef(null);
 
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await upsertSlot({
-        date,
-        slot_index:  slotIdx,
-        record_type: viewMode,
-        task_id:     taskId || null,
-        label:       label  || null,
-        comments,
-      });
-      onCancel();
-    } catch {
-      setSaving(false);
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
     }
+  }, []);
+
+  function commit() {
+    const val = (inputRef.current?.value ?? '').trim();
+    if (val && val !== initialValue) onSave(val);
+    else onCancel();
   }
 
   return (
-    <tr className="sg-row sg-row-editing" onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}>
-      <td className="sg-td sg-td-time">{def?.display}</td>
-      <td className="sg-td sg-td-task" colSpan={2}>
-        <div className="sg-inline-edit">
-          <select className="sg-inline-input" value={taskId} onChange={e => setTaskId(e.target.value)}>
-            <option value="">— clear slot —</option>
-            {tasks.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          <input className="sg-inline-input" type="text" value={label}
-            onChange={e => setLabel(e.target.value)} placeholder="Label (optional)" />
-          <input className="sg-inline-input" type="text" value={comments}
-            onChange={e => setComments(e.target.value)} placeholder="Comments" />
-          <div className="sg-inline-actions">
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
-          </div>
-        </div>
-      </td>
-    </tr>
+    <input
+      ref={inputRef}
+      className="sg-cell-input"
+      type="text"
+      defaultValue={initialValue}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        else if (e.key === 'Tab')   { e.preventDefault(); commit(); onTabNext?.(); }
+      }}
+    />
   );
 }
 
@@ -207,11 +188,11 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
   { viewMode, setViewMode, selectedSlots, setSelectedSlots, shakingSlot },
   ref
 ) {
-  const { schedule, tasks, generateSchedule, fetchSchedule, upsertSlot } = useApp();
+  const { schedule, tasks, generateSchedule, fetchSchedule, upsertSlot, updateTask } = useApp();
 
   const [generating,   setGenerating]   = useState(false);
   const [genError,     setGenError]     = useState('');
-  const [editingSlot,  setEditingSlot]  = useState(null);
+  const [editingCell,  setEditingCell]  = useState(null);   // {slotIdx, field:'name'|'category'} | null
   const [creatingSlot, setCreatingSlot] = useState(null);
 
   // Multi-row selection helpers (not DnD-related)
@@ -231,7 +212,7 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
   // Expose clearEditing so PlannerPage can call on drag start
   useImperativeHandle(ref, () => ({
     clearEditing() {
-      setEditingSlot(null);
+      setEditingCell(null);
       setCreatingSlot(null);
     },
   }));
@@ -251,7 +232,7 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
 
   // ── Row click handler ──────────────────────────────────────────────────────
   function handleRowClick(e, idx, hasTask) {
-    if (creatingSlot !== null || editingSlot !== null) return;
+    if (creatingSlot !== null || editingCell !== null) return;
 
     if (e.ctrlKey || e.metaKey) {
       // Ctrl+Click (or Cmd+Click on Mac): toggle selection without opening any form
@@ -266,11 +247,12 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
       return;
     }
 
-    // Plain click: clear selection, then handle slot action
+    // Plain click: clear selection
     if (selectedSlots.size > 0) setSelectedSlots(new Set());
     setLastClicked(idx);
-    if (hasTask) setEditingSlot(idx);
-    else setCreatingSlot(idx);
+    // Occupied rows: cell onClick handles per-cell editing; don't open any form at row level
+    // Empty rows: open inline create
+    if (!hasTask) setCreatingSlot(idx);
   }
 
   return (
@@ -289,13 +271,13 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
             <div className="sg-view-toggle" role="group" aria-label="View mode">
               <button
                 className={`sg-toggle-btn ${viewMode === 'planned' ? 'active' : ''}`}
-                onClick={() => { setViewMode('planned'); setEditingSlot(null); setCreatingSlot(null); }}
+                onClick={() => { setViewMode('planned'); setEditingCell(null); setCreatingSlot(null); }}
               >
                 Plan
               </button>
               <button
                 className={`sg-toggle-btn ${viewMode === 'actual' ? 'active' : ''}`}
-                onClick={() => { setViewMode('actual'); setEditingSlot(null); setCreatingSlot(null); }}
+                onClick={() => { setViewMode('actual'); setEditingCell(null); setCreatingSlot(null); }}
               >
                 Actual
               </button>
@@ -344,22 +326,6 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
                   );
                 }
 
-                // Inline edit mode
-                if (editingSlot === idx) {
-                  return (
-                    <InlineEditRow
-                      key={idx}
-                      slotIdx={idx}
-                      slot={slotMap[idx] || null}
-                      date={date}
-                      viewMode={viewMode}
-                      tasks={tasks}
-                      upsertSlot={upsertSlot}
-                      onCancel={() => setEditingSlot(null)}
-                    />
-                  );
-                }
-
                 const slot    = slotMap[idx] || null;
                 const hasTask = !!(slot && slot.task_id);
                 const task    = slot?.task || null;
@@ -397,32 +363,62 @@ const ScheduleGrid = forwardRef(function ScheduleGrid(
                         setSelectedSlots(prev => new Set([...prev, idx]));
                       }
                     }}
-                    title={hasTask ? 'Drag to reorder · Click to edit · Shift+click to select' : 'Click to create task'}
+                    title={hasTask ? 'Drag to reorder · Click cell to edit · Ctrl+click to select' : 'Click to create task'}
                   >
                     <td className="sg-td sg-td-time">{display}</td>
-                    <td className="sg-td sg-td-task">
+                    <td
+                      className={`sg-td sg-td-task${editingCell?.slotIdx === idx && editingCell?.field === 'name' ? ' sg-td-editing' : ''}`}
+                      onClick={hasTask ? e => { e.stopPropagation(); setEditingCell({ slotIdx: idx, field: 'name' }); } : undefined}
+                    >
                       {hasTask ? (
-                        <div className="sg-task-chips">
-                          <div className="sg-task-chip">
-                            {isBreak ? (
-                              <span className="sg-break-icon">☕</span>
-                            ) : (
-                              <span className="sg-cat-dot" style={{ background: color }} />
-                            )}
-                            <span className="sg-task-name">
-                              {slot.label || task?.name || ''}
-                            </span>
+                        editingCell?.slotIdx === idx && editingCell?.field === 'name' ? (
+                          <TaskNameInput
+                            initialValue={task?.name || ''}
+                            onSave={val => { updateTask(task.id, { name: val }).catch(() => {}); setEditingCell(null); }}
+                            onCancel={() => setEditingCell(null)}
+                            onTabNext={() => setEditingCell({ slotIdx: idx, field: 'category' })}
+                          />
+                        ) : (
+                          <div className="sg-task-chips">
+                            <div className="sg-task-chip">
+                              {isBreak ? (
+                                <span className="sg-break-icon">☕</span>
+                              ) : (
+                                <span className="sg-cat-dot" style={{ background: color }} />
+                              )}
+                              <span className="sg-task-name">
+                                {slot.label || task?.name || ''}
+                              </span>
+                            </div>
                           </div>
-                        </div>
+                        )
                       ) : (
                         <span className="sg-empty-label sg-add-hint">＋ Add task</span>
                       )}
                     </td>
-                    <td className="sg-td sg-td-cat">
+                    <td
+                      className={`sg-td sg-td-cat${editingCell?.slotIdx === idx && editingCell?.field === 'category' ? ' sg-td-editing' : ''}`}
+                      onClick={hasTask ? e => { e.stopPropagation(); setEditingCell({ slotIdx: idx, field: 'category' }); } : undefined}
+                    >
                       {task && (
-                        <span className="sg-cat-pill" style={{ background: `${color}22`, color }}>
-                          {task.category}
-                        </span>
+                        editingCell?.slotIdx === idx && editingCell?.field === 'category' ? (
+                          <select
+                            className="sg-cell-select"
+                            autoFocus
+                            defaultValue={task.category}
+                            onChange={e => { updateTask(task.id, { category: e.target.value }).catch(() => {}); setEditingCell(null); }}
+                            onBlur={() => setEditingCell(null)}
+                            onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setEditingCell(null); } }}
+                          >
+                            {CATEGORIES.filter(c => c !== 'break').map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="sg-cat-pill" style={{ background: `${color}22`, color }}>
+                            {task.category}
+                          </span>
+                        )
                       )}
                     </td>
                     <InlineCommentCell
