@@ -15,7 +15,7 @@
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'google/gemini-3.1-flash-lite-preview';
 const REFERER = 'https://github.com/tonydevar/smart-planner';
-const APP_TITLE = 'Smart Planner';
+const APP_TITLE = 'Waypoint';
 
 // ─── Heuristic fallback (ported from ai-helper.js) ───────────────────────────
 
