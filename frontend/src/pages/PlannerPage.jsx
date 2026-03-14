@@ -481,7 +481,7 @@ export default function PlannerPage() {
     return (
       <div className="planner-loading">
         <span className="spinner" style={{ width: 32, height: 32 }} />
-        <span>Loading Smart Planner…</span>
+        <span>Loading Waypoint…</span>
       </div>
     );
   }
@@ -506,7 +506,7 @@ export default function PlannerPage() {
               {sidebarOpen ? '◀' : '☰'}
             </button>
             <span className="planner-logo-icon">🧠</span>
-            <span className="planner-logo-text">Smart Planner</span>
+            <span className="planner-logo-text">Waypoint</span>
           </div>
           <div className="planner-header-actions">
             <button
