@@ -505,7 +505,7 @@ export default function PlannerPage() {
             >
               {sidebarOpen ? '◀' : '☰'}
             </button>
-            <span className="planner-logo-icon">🧠</span>
+            <span className="planner-logo-icon">🧭</span>
             <span className="planner-logo-text">Waypoint</span>
           </div>
           <div className="planner-header-actions">
