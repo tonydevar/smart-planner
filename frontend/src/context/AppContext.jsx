@@ -143,6 +143,18 @@ export function AppProvider({ children }) {
     if (!res.ok) throw new Error('Failed to update task');
     const task = await res.json();
     dispatch({ type: 'UPDATE_TASK', payload: task });
+    // Updating a task changes slot.task in the schedule — refetch it
+    const today = todayISO();
+    fetch(`/api/schedule?date=${today}`)
+      .then(r => r.json())
+      .then(sched => dispatch({ type: 'SET_SCHEDULE', payload: {
+        date:         today,
+        planned:      sched.planned      || [],
+        actual:       sched.actual       || [],
+        timeSlots:    sched.timeSlots    || [],
+        flaggedTasks: sched.flaggedTasks || [],
+      }}))
+      .catch(() => {});
     return task;
   }, []);
 
